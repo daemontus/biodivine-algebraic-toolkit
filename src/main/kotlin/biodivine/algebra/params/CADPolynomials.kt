@@ -8,6 +8,8 @@ import biodivine.algebra.synth.Box
 import cc.redberry.rings.Rings
 import cc.redberry.rings.poly.IPolynomialRing
 import cc.redberry.rings.poly.PolynomialMethods.Factor
+import cc.redberry.rings.poly.multivar.MonomialOrder
+import cc.redberry.rings.poly.multivar.MultivariatePolynomial
 import cc.redberry.rings.poly.univar.UnivariateResultants
 
 val ISOLATE_PRECISION = Rings.Q.parse("1/1000")
@@ -142,7 +144,6 @@ data class CADPolynomials(
      * and its coordinates.
      */
     fun walkCells(): Iterator<Pair<List<NumQ>, List<Int>>> = iterator {
-        val dimensions = bounds.data.size
         // work stack entry contains three items:
         // 1. Partially evaluated list of levels (the ones that still need to be applied)
         // 2. Partial call coordinates
@@ -196,14 +197,19 @@ fun main() {
     val ring = Rings.MultivariateRingQ(2)
     val p = ring.parse("x^2-y")
     val q = ring.parse("x^2 - 4*x + 4 - y")
+    val q2 = ring.parse("x^2 - 4*x + 4 - y")
     val bounds = Box(Interval(0, 2), Interval(0, 2))
-    val cad = CADPolynomials.make(ring, listOf(p, q), bounds)
+    val cad = LevelGraph(listOf(p, q), ring, bounds)
     println("CAD Polynomials: $cad")
     cad.walkCells().forEach { (point, coordinates) ->
-        println("Point $point with id $coordinates")
+        println("Point ${point.toList()} with id $coordinates")
     }
 
     println("Cell ${cad.cellForPoint(listOf(Rings.Q.parse("1/2"), Rings.Q.parse("3/2")))}")
+
+    for (poly in cad.basis) {
+
+    }
 }
 
 fun List<MPoly>.normalize(): List<MPoly> = this.flatMap { Factor(it) }.map { it.divideByLC(it) }

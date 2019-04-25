@@ -79,6 +79,7 @@ data class Interval(
 
     operator fun contains(num: NumQ): Boolean = this.low <= num && this.high >= num
 
+    fun isNumber(): Boolean = this.low == this.high
 }
 
 operator fun NumQ.plus(that: NumQ): NumQ = this.add(that)
