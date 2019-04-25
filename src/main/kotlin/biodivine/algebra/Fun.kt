@@ -105,8 +105,10 @@ fun main(args: Array<String>) {
     proje3.forEach { println(it) }
 }
 
+/*
 fun <T> UnivariatePolynomial<T>.reductum(): UnivariatePolynomial<T> =
     if (isZero) this else copy().shiftLeft(1)
+ */
 
 fun <T> UnivariatePolynomial<T>.reductumSet(): Set<UnivariatePolynomial<T>> {
     val result = HashSet<UnivariatePolynomial<T>>(this.degree())
