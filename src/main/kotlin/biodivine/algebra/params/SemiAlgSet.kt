@@ -6,6 +6,7 @@ import biodivine.algebra.synth.Box
 import cc.redberry.rings.Rings
 import cc.redberry.rings.poly.IPolynomialRing
 import java.util.*
+import kotlin.system.measureTimeMillis
 
 data class Cell(
     private val coordinates: IntArray
@@ -129,13 +130,19 @@ fun main() {
     val solver = SemiAlgSolver(bounds, ring)
     val p = ring.parse("x^2-y")
     val q = ring.parse("x^2 - 4*x + 4 - y")
-    val pNeg = solver.negative(p)
-    val qNeg = solver.negative(q)
-    println("P negative: $pNeg")
-    println("Q negative: $qNeg")
-    println("P and Q negative: ${solver.run { pNeg and qNeg }}")
-    println("P or Q negative: ${solver.run { pNeg or qNeg }}")
-    println("P subset Q: ${solver.run { pNeg subset qNeg }}")
-    println("P and Q.not: ${solver.run { pNeg and qNeg.not() }}")
-    println("P and Q.not subset P: ${solver.run { (pNeg and qNeg.not()) subset pNeg }}")
+    val elapsed = measureTimeMillis {
+        repeat(1000) {
+            val pNeg = solver.negative(p)
+            val qNeg = solver.negative(q)
+            solver.run {
+                val a = pNeg and qNeg
+                val b = pNeg or qNeg
+                val c = pNeg subset qNeg
+                val d = pNeg and qNeg.not()
+                val e = (pNeg and qNeg.not()) subset pNeg
+                println("Iter: $it (${(a and b and d).isEmpty()} $c $e")
+            }
+        }
+    }
+    println("Elapsed: $elapsed")
 }

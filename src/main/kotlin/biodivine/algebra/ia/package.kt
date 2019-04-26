@@ -7,6 +7,7 @@ import biodivine.algebra.project
 import cc.redberry.rings.Rational
 import cc.redberry.rings.Rings
 import cc.redberry.rings.bigint.BigInteger
+import cc.redberry.rings.poly.univar.UnivariatePolynomial
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.File

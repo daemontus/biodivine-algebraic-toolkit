@@ -6,6 +6,7 @@ import cc.redberry.rings.poly.univar.UnivariatePolynomial
 import cc.redberry.rings.poly.univar.UnivariateSquareFreeFactorization
 import biodivine.algebra.getDefaultBoundForDescartMethod
 import biodivine.algebra.getNumberOfSignChanges
+import biodivine.algebra.ia.evaluate
 import biodivine.algebra.transformPolyToInterval
 
 object DescartWithSquareFreeFactorisationRootIsolation : RootIsolation {
@@ -25,23 +26,33 @@ object DescartWithSquareFreeFactorisationRootIsolation : RootIsolation {
     }
 
 
-    private fun isolateAllRootsRecursively(polynomial: UnivariatePolynomial<NumQ>, lowerBound: NumQ, upperBound: NumQ, precision: NumQ): List<Interval> {
-        val numberOfSignChangesInInterval = polynomial.transformPolyToInterval(lowerBound, upperBound).getNumberOfSignChanges()
-        val middleValue = (upperBound.add(lowerBound)).divide(BigInteger.TWO)
-        val actualPrecision = (upperBound.subtract(lowerBound)).divide(BigInteger.TWO)
+    private fun isolateAllRootsRecursively(polynomial: UnivariatePolynomial<NumQ>, mainLowerBound: NumQ, mainUpperBound: NumQ, precision: NumQ): List<Interval> {
+        val result = ArrayList<Interval>()
+        val workQueue = ArrayList<Interval>()
+        workQueue.add(Interval(mainLowerBound, mainUpperBound))
+        while (workQueue.isNotEmpty()) {
+            val interval = workQueue.removeAt(workQueue.lastIndex)
+            if (!polynomial.evaluate(interval).hasZero) continue    // fast-skip non-zero intervals
+            val (lowerBound, upperBound) = interval
+            val numberOfSignChangesInInterval = polynomial.transformPolyToInterval(lowerBound, upperBound).getNumberOfSignChanges()
+            val middleValue = (upperBound.add(lowerBound)).divide(BigInteger.TWO)
+            val actualPrecision = (upperBound.subtract(lowerBound)).divide(BigInteger.TWO)
 
-        if (numberOfSignChangesInInterval == 0) {
-            return listOf()
-        }
+            if (polynomial.evaluate(middleValue).isZero) {
+                result.add(Interval(middleValue, middleValue))
+            }
 
-        if (numberOfSignChangesInInterval == 1 && precision > actualPrecision) {
-            return listOf(Interval(lowerBound, upperBound))
-        }
-
-        return isolateAllRootsRecursively(polynomial, lowerBound, middleValue, precision) +
-                isolateAllRootsRecursively(polynomial, middleValue, upperBound, precision) +
-                listOf(middleValue).filter { polynomial.evaluate(it).isZero }.map { q ->
-                    Interval(q, q)
+            when {
+                numberOfSignChangesInInterval == 0 -> Unit
+                numberOfSignChangesInInterval == 1 && precision > actualPrecision -> {
+                    result.add(Interval(lowerBound, upperBound))
                 }
+                else -> {
+                    workQueue.add(Interval(lowerBound, middleValue))
+                    workQueue.add(Interval(middleValue, upperBound))
+                }
+            }
+        }
+        return result
     }
 }

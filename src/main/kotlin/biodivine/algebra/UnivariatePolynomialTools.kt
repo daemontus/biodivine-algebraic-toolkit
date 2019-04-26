@@ -7,6 +7,8 @@ import cc.redberry.rings.poly.univar.UnivariatePolynomial
 
 val coder = Rings.UnivariateRingQ.mkCoder("x")
 
+private val onePlusX = (0..10).map { coder.parse("(1 + x)^$it") }
+
 /***
  * transform polynomial p by formula : (1 + x)^n * p( (ax + b) / (1 + x))
  */
@@ -16,7 +18,7 @@ fun UnivariatePolynomial<NumQ>.transformPolyToInterval(lowerBound: NumQ, upperBo
     var exponent = degree()
 
     for (coef in this) {
-        val multiplyPoly = coder.parse("(1 + x)^$exponent")
+        val multiplyPoly = onePlusX[exponent].copy()
         val subst = coder.parse("($lowerBound * x + $upperBound)^${degree() - exponent}")
         result.add(multiplyPoly.multiply(subst.multiply(coef)))
         exponent -= 1
