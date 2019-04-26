@@ -11,6 +11,14 @@ import biodivine.algebra.transformPolyToInterval
 
 object DescartWithSquareFreeFactorisationRootIsolation : RootIsolation {
 
+    override fun isolateInBounds(
+        polynomial: UnivariatePolynomial<NumQ>,
+        bounds: Interval,
+        precision: NumQ
+    ): List<Interval> {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
     override fun isolateRoots(polynomial: UnivariatePolynomial<NumQ>, precision: NumQ): List<Interval> {
         val computedRoots = mutableListOf<Interval>()
         for (poly in UnivariateSquareFreeFactorization.SquareFreeFactorization(polynomial)) {
@@ -31,9 +39,7 @@ object DescartWithSquareFreeFactorisationRootIsolation : RootIsolation {
         val workQueue = ArrayList<Interval>()
         workQueue.add(Interval(mainLowerBound, mainUpperBound))
         while (workQueue.isNotEmpty()) {
-            val interval = workQueue.removeAt(workQueue.lastIndex)
-            if (!polynomial.evaluate(interval).hasZero) continue    // fast-skip non-zero intervals
-            val (lowerBound, upperBound) = interval
+            val (lowerBound, upperBound) = workQueue.removeAt(workQueue.lastIndex)
             val numberOfSignChangesInInterval = polynomial.transformPolyToInterval(lowerBound, upperBound).getNumberOfSignChanges()
             val middleValue = (upperBound.add(lowerBound)).divide(BigInteger.TWO)
             val actualPrecision = (upperBound.subtract(lowerBound)).divide(BigInteger.TWO)

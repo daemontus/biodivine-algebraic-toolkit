@@ -1,5 +1,6 @@
 package biodivine.algebra
 
+import biodivine.algebra.svg.zero
 import cc.redberry.rings.Rings
 import cc.redberry.rings.Rings.Q
 import cc.redberry.rings.bigint.BigInteger
@@ -7,20 +8,28 @@ import cc.redberry.rings.poly.univar.UnivariatePolynomial
 
 val coder = Rings.UnivariateRingQ.mkCoder("x")
 
-private val onePlusX = (0..10).map { coder.parse("(1 + x)^$it") }
+/**
+ * TODO: Here, we assume this goes up to degree 10 - fix it to be universal
+ */
+private val normalizationFactors = (0..10).map { coder.parse("(1 + x)^$it") }
 
 /***
  * transform polynomial p by formula : (1 + x)^n * p( (ax + b) / (1 + x))
  */
 
 fun UnivariatePolynomial<NumQ>.transformPolyToInterval(lowerBound: NumQ, upperBound: NumQ): UnivariatePolynomial<NumQ> {
-    val result = UnivariatePolynomial.zero(Rings.Q)
+    val result = UnivariatePolynomial.zero(Q)
     var exponent = degree()
 
+    val substitutionTerm = UnivariatePolynomial.create(Q, upperBound, lowerBound)
+    var substitution = UnivariatePolynomial.one(Q)
+
     for (coef in this) {
-        val multiplyPoly = onePlusX[exponent].copy()
-        val subst = coder.parse("($lowerBound * x + $upperBound)^${degree() - exponent}")
-        result.add(multiplyPoly.multiply(subst.multiply(coef)))
+        if (coef != zero) {
+            val normalization = normalizationFactors[exponent].copy()
+            result.add(normalization.multiply(substitution.copy().multiply(coef)))
+        }
+        substitution = substitution.multiply(substitutionTerm)
         exponent -= 1
     }
     return result
@@ -55,7 +64,7 @@ fun UnivariatePolynomial<NumQ>.getFirstNonZeroCoefficient(): NumQ {
             return coef
         }
     }
-    return Rings.Q.zero
+    return Q.zero
 }
 
 fun UnivariatePolynomial<NumQ>.getDefaultBoundForDescartMethod(): NumQ {

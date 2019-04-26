@@ -10,39 +10,51 @@ import biodivine.algebra.transformPolyToInterval
 
 object DescartWithPolyFactorisationRootIsolation : RootIsolation {
 
-    override fun isolateRoots(polynomial: UnivariatePolynomial<NumQ>, precision: NumQ): List<Interval> {
+    override fun isolateInBounds(
+        polynomial: UnivariatePolynomial<NumQ>,
+        bounds: Interval,
+        precision: NumQ
+    ): List<Interval> {
         val computedRoots = mutableListOf<Interval>()
         for (poly in UnivariateFactorization.Factor(polynomial)) {
             if (poly.isLinearExactly) {
-                computedRoots += Interval(poly[0].negate(), poly[0].negate())
+                if (poly[0].negate() in bounds) {
+                    computedRoots += Interval(poly[0].negate(), poly[0].negate())
+                }
             } else {
-                computedRoots += isolateIrationalRoots(poly, precision)
+                computedRoots += isolateIrracionalRootsRecursively(poly, bounds, precision)
             }
         }
         return computedRoots
     }
 
-
-    private fun isolateIrationalRoots(polynomial: UnivariatePolynomial<NumQ>, precision: NumQ): List<Interval> {
-        val defaultBound = polynomial.getDefaultBoundForDescartMethod()
-        return isolateIrracionalRootsRecursively(polynomial, defaultBound.negate(), defaultBound, precision)
+    override fun isolateRoots(polynomial: UnivariatePolynomial<NumQ>, precision: NumQ): List<Interval> {
+        val defaultBound = Interval(polynomial.getDefaultBoundForDescartMethod().negate(), polynomial.getDefaultBoundForDescartMethod())
+        return isolateInBounds(polynomial, defaultBound, precision)
     }
 
-    private fun isolateIrracionalRootsRecursively(polynomial: UnivariatePolynomial<NumQ>, lowerBound: NumQ, upperBound: NumQ, precision: NumQ): List<Interval> {
-        val numberOfSignChangesInInterval = polynomial.transformPolyToInterval(lowerBound, upperBound).getNumberOfSignChanges()
-        val middleValue = (upperBound.add(lowerBound)).divide(BigInteger.TWO)
-        val actualPrecision = (upperBound.subtract(lowerBound)).divide(BigInteger.TWO)
+    private fun isolateIrracionalRootsRecursively(polynomial: UnivariatePolynomial<NumQ>, bounds: Interval, precision: NumQ): List<Interval> {
+        val result = ArrayList<Interval>()
+        val workQueue = ArrayList<Interval>()
+        workQueue.add(bounds)
+        while (workQueue.isNotEmpty()) {
+            val (lowerBound, upperBound) = workQueue.removeAt(workQueue.lastIndex)
+            val numberOfSignChangesInInterval = polynomial.transformPolyToInterval(lowerBound, upperBound).getNumberOfSignChanges()
+            val middleValue = (upperBound.add(lowerBound)).divide(BigInteger.TWO)
+            val actualPrecision = (upperBound.subtract(lowerBound)).divide(BigInteger.TWO)
 
-        if (numberOfSignChangesInInterval == 0) {
-            return listOf()
+            when {
+                numberOfSignChangesInInterval == 0 -> Unit
+                numberOfSignChangesInInterval == 1 && precision > actualPrecision -> {
+                    result.add(Interval(lowerBound, upperBound))
+                }
+                else -> {
+                    workQueue.add(Interval(lowerBound, middleValue))
+                    workQueue.add(Interval(middleValue, upperBound))
+                }
+            }
         }
-
-        if (numberOfSignChangesInInterval == 1 && precision > actualPrecision) {
-            return listOf(Interval(lowerBound, upperBound))
-        }
-
-        return isolateIrracionalRootsRecursively(polynomial, lowerBound, middleValue, precision) +
-                isolateIrracionalRootsRecursively(polynomial, middleValue, upperBound, precision)
+        return result
     }
 
 }

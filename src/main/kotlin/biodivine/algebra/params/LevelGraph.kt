@@ -5,8 +5,7 @@ import biodivine.algebra.NumQ
 import biodivine.algebra.ia.div
 import biodivine.algebra.ia.minus
 import biodivine.algebra.ia.plus
-import biodivine.algebra.rootisolation.DescartWithSquareFreeFactorisationRootIsolation
-import biodivine.algebra.svg.zero
+import biodivine.algebra.rootisolation.DescartWithPolyFactorisationRootIsolation
 import biodivine.algebra.synth.Box
 import cc.redberry.rings.poly.IPolynomialRing
 import cc.redberry.rings.poly.univar.UnivariateResultants
@@ -139,8 +138,9 @@ class LevelGraph(
         for (d in 0 until dimensions) {
             val interval = bounds.data[d]
             val levelPolynomials = evalLevels[d].map { it.asUnivariate() }  // it this point, level d should be univariate
-            val roots = DescartWithSquareFreeFactorisationRootIsolation
-                .isolateRoots(levelPolynomials, ISOLATE_PRECISION)
+            val roots = DescartWithPolyFactorisationRootIsolation
+                .isolateRootsInBounds(levelPolynomials, interval, ISOLATE_PRECISION)
+                /*.isolateRoots(levelPolynomials, ISOLATE_PRECISION)
                 .toSet()    // there might be duplicates - shouldn't due to factoring, but can be
                 .filter { root ->
                     // Here, we handle some edge cases - ideally, you would refine these roots further, but at this point
@@ -148,7 +148,7 @@ class LevelGraph(
                     if (root.low < interval.low && root.high > interval.low) error("Root crosses boundary")
                     if (root.low < interval.high && root.high > interval.high) error("Root crosses boundary")
                     root.low >= interval.low && root.high <= interval.high    // exclude roots which fall outside of the interval
-                }
+                }*/
                 .sortedBy { it.low }
             val pointValue = point[d]
             // in fact, since bound polynomials should be part of this, we should always get dimBounds as roots too
@@ -198,14 +198,15 @@ class LevelGraph(
             val interval = bounds.data[d]
             // The first item of levels should depend only on dimension d
             val levelPolynomials = remainingLevels.first().map { it.asUnivariate() }
-            val roots = DescartWithSquareFreeFactorisationRootIsolation
-                .isolateRoots(levelPolynomials, ISOLATE_PRECISION)
+            val roots = DescartWithPolyFactorisationRootIsolation
+                .isolateRootsInBounds(levelPolynomials, interval, ISOLATE_PRECISION)
+                /*.isolateRoots(levelPolynomials, ISOLATE_PRECISION)
                 .toSet()    // there might be duplicates - shouldn't due to factoring, but can be
                 .filter { root ->
                     if (root.low < interval.low && root.high > interval.low) error("Root crosses boundary")
                     if (root.low < interval.high && root.high > interval.high) error("Root crosses boundary")
                     root.low >= interval.low && root.high <= interval.high
-                }
+                }*/
                 .sortedBy { it.low }
             // in fact, since bound polynomials should be part of this, we should always get dimBounds as roots too
             if (roots.first().isNumber() && roots.first().low != interval.low) error("WTF: bounds missing")

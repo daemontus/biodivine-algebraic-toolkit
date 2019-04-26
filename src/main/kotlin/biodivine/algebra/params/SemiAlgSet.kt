@@ -73,8 +73,10 @@ class SemiAlgSolver(
         val levelUnion = LevelGraph(this.levelGraph, that.levelGraph)
         return levelUnion.walkCells().all { (point, _) ->
             val cellInThis = this.levelGraph.cellForPoint(point)
-            val cellInThat = that.levelGraph.cellForPoint(point)
-            cellInThis !in this.validCells || cellInThat in that.validCells
+            if (cellInThis !in this.validCells) true else {
+                val cellInThat = that.levelGraph.cellForPoint(point)
+                cellInThat in that.validCells
+            }
         }
     }
 
@@ -82,8 +84,10 @@ class SemiAlgSolver(
         val levelUnion = LevelGraph(this.levelGraph, that.levelGraph)
         val validDisjunction = levelUnion.walkCells().mapNotNull { (point, cell) ->
             val cellInThis = this.levelGraph.cellForPoint(point)
-            val cellInThat = that.levelGraph.cellForPoint(point)
-            cell.takeIf { cellInThis in this.validCells || cellInThat in that.validCells }
+            if (cellInThis in this.validCells) cell else {
+                val cellInThat = that.levelGraph.cellForPoint(point)
+                if (cellInThat in that.validCells) cell else null
+            }
         }.toSet()
         return SemiAlgSet(levelUnion, validDisjunction)
     }
@@ -92,8 +96,10 @@ class SemiAlgSolver(
         val levelUnion = LevelGraph(this.levelGraph, that.levelGraph)
         val validIntersection = levelUnion.walkCells().mapNotNull { (point, cell) ->
             val cellInThis = this.levelGraph.cellForPoint(point)
-            val cellInThat = that.levelGraph.cellForPoint(point)
-            cell.takeIf { cellInThis in this.validCells && cellInThat in that.validCells }
+            if (cellInThis !in this.validCells) null else {
+                val cellInThat = that.levelGraph.cellForPoint(point)
+                if (cellInThat !in that.validCells) null else cell
+            }
         }.toSet()
         return SemiAlgSet(levelUnion, validIntersection)
     }
@@ -130,8 +136,25 @@ fun main() {
     val solver = SemiAlgSolver(bounds, ring)
     val p = ring.parse("x^2-y")
     val q = ring.parse("x^2 - 4*x + 4 - y")
+    solver.run {
+        val pNeg = solver.negative(p)
+        println("P: $pNeg")
+        val qNeg = solver.negative(q)
+        println("Q: $qNeg")
+        val a = pNeg and qNeg
+        val b = pNeg or qNeg
+        val c = pNeg subset qNeg
+        val d = pNeg and qNeg.not()
+        val e = (pNeg and qNeg.not()) subset pNeg
+        println("P and Q: $a")
+        println("P or Q: $b")
+        println("P subset Q: $c")
+        println("P and !Q: $d")
+        println("P and !Q subset P: $e")
+    }
     val elapsed = measureTimeMillis {
-        repeat(1000) {
+        var v = true
+        repeat(2500) { i ->
             val pNeg = solver.negative(p)
             val qNeg = solver.negative(q)
             solver.run {
@@ -140,7 +163,10 @@ fun main() {
                 val c = pNeg subset qNeg
                 val d = pNeg and qNeg.not()
                 val e = (pNeg and qNeg.not()) subset pNeg
-                println("Iter: $it (${(a and b and d).isEmpty()} $c $e")
+                v = v && a.isNotEmpty() && b.isNotEmpty() || c && d.isEmpty() || e
+                if (i % 100 == 0) {
+                    println("Iter: $i (${(a and b and d).isEmpty()} $c $e")
+                }
             }
         }
     }
