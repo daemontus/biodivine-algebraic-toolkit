@@ -1,10 +1,12 @@
 package biodivine.algebra.ia
 
 import biodivine.algebra.NumQ
+import biodivine.algebra.rootisolation.Root
 import cc.redberry.rings.Rational
 import cc.redberry.rings.Rings
 import cc.redberry.rings.bigint.BigDecimal
 import cc.redberry.rings.bigint.BigInteger
+import biodivine.algebra.rootisolation.compareTo
 import kotlin.math.max
 import kotlin.math.min
 
@@ -77,7 +79,8 @@ data class Interval(
         return Interval(low, high)
     }
 
-    operator fun contains(num: NumQ): Boolean = this.low <= num && this.high >= num
+    operator fun contains(num: NumQ): Boolean = this.low <= num && num <= this.high
+    operator fun contains(root: Root): Boolean = this.low <= root && root <= this.high
 
     fun isNumber(): Boolean = this.low == this.high
 }

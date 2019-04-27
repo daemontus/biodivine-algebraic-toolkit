@@ -1,5 +1,6 @@
 package biodivine.algebra.rootisolation
 
+import biodivine.algebra.UPoly
 import cc.redberry.rings.bigint.BigInteger
 import cc.redberry.rings.poly.univar.UnivariateFactorization
 import cc.redberry.rings.poly.univar.UnivariatePolynomial

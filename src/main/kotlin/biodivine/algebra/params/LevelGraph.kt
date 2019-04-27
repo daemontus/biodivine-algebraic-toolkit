@@ -2,19 +2,13 @@ package biodivine.algebra.params
 
 import biodivine.algebra.MPoly
 import biodivine.algebra.NumQ
-import biodivine.algebra.ia.Interval
-import biodivine.algebra.ia.div
-import biodivine.algebra.ia.minus
-import biodivine.algebra.ia.plus
-import biodivine.algebra.rootisolation.DescartWithPolyFactorisationRootIsolation
+import biodivine.algebra.rootisolation.AdaptiveRootIsolation
 import biodivine.algebra.synth.Box
-import biodivine.algebra.synth.ten
-import biodivine.algebra.synth.two
-import cc.redberry.rings.Rational
 import cc.redberry.rings.Rings
-import cc.redberry.rings.Rings.Q
 import cc.redberry.rings.poly.IPolynomialRing
 import cc.redberry.rings.poly.univar.UnivariateResultants
+
+var maxLevels = 0
 
 /**
  * LevelGraph is a dependency graph of polynomials, where each polynomial has a level, i.e.
@@ -60,6 +54,11 @@ class LevelGraph private constructor(
 
     constructor(basis: List<MPoly>, ring: IPolynomialRing<MPoly>, bounds: Box) : this(ring, bounds) {
         basis.forEach { insert(it) }
+
+        if (levels[0].size > maxLevels) {
+            maxLevels = levels[0].size
+            println("New Max: $maxLevels $this")
+        }
     }
 
     constructor(graph1: LevelGraph, graph2: LevelGraph): this(graph1.ring, graph1.bounds) {
@@ -67,6 +66,11 @@ class LevelGraph private constructor(
         this.dependencies.addAll((graph1.dependencies + graph2.dependencies).toSet())   // copy dependencies
         graph1.levels.forEach { level -> level.forEach { insert(it) } }
         graph2.levels.forEach { level -> level.forEach { insert(it) } }
+
+        if (levels[0].size > maxLevels) {
+            maxLevels = levels[0].size
+            println("New Max: $maxLevels $this")
+        }
     }
 
     constructor(graph: LevelGraph, exclude: MPoly): this(graph.ring, graph.bounds) {
@@ -78,6 +82,11 @@ class LevelGraph private constructor(
         dependencies.addAll(graph.dependencies)
         // remove excluded polynomial with its dependencies
         remove(exclude)
+
+        if (levels[0].size > maxLevels) {
+            maxLevels = levels[0].size
+            println("New Max: $maxLevels $this")
+        }
     }
 
     /**
@@ -114,6 +123,11 @@ class LevelGraph private constructor(
             }
         }
         dependencies.addAll(newDependencies)
+
+        if (levels[0].size > maxLevels) {
+            maxLevels = levels[0].size
+            println("New Max: $maxLevels $this")
+        }
     }
 
     /**
@@ -185,34 +199,19 @@ class LevelGraph private constructor(
         val evalLevels = levels.map { l -> l.map { it.copy() }.toMutableList() }
         for (d in 0 until dimensions) {
             val interval = bounds.data[d]
-            val levelPolynomials = evalLevels[d].map { it.asUnivariate() }  // it this point, level d should be univariate
-            var precision = Q.parse("1/100")
-            var roots: List<Interval>? = null
+            val levelPolynomials = evalLevels[d].map { it.asUnivariate() }  // d-level has always one variable remaining
             val pointValue = point[d]
-            while (roots == null) {
-                roots = DescartWithPolyFactorisationRootIsolation
-                    .isolateRootsInBounds(levelPolynomials, interval, precision)
-                    .sortedBy { it.low }
-                // in fact, since bound polynomials should be part of this, we should always get dimBounds as roots too
-                if (roots.first().low != roots.first().high && roots.first().low != interval.low) roots = null//error("WTF: bounds missing")
-                if (roots != null && roots.last().low != roots.last().high && roots.last().low != interval.high) roots = null//error("WTF: bounds missing")
-                // If the requested point falls too close to a root, we also fail, but we should refine the interval instead.
-                if (roots != null && roots.any { pointValue in it }) roots = null//error("Point inside root interval :( point $point in $roots for dim $d")
-                precision = precision.div(ten)
-            }
-            // TODO: Here, we should be using binary search because the number of roots can be high
-            for (cell in 0 until (roots.size - 1))  {   // n thresholds defines n-1 cells
-                val cellLow = roots[cell]
-                val cellHigh = roots[cell + 1]
-                if (cellLow.high <= pointValue && pointValue <= cellHigh.low) {
-                    // WE FOUND IT! Save the cell id and update all levels polynomials
-                    result[d] = cell
-                    // partially evaluate all level polynomials at this point
-                    evalLevels.forEach { level ->
-                        level.replaceAll { p -> p.evaluate(d, pointValue) }
-                    }
-                    // skip all other roots
-                    break
+            val roots = AdaptiveRootIsolation.isolateRootsInBounds(levelPolynomials, interval).toList() // values are already sorted
+            val searchResult = roots.binarySearch { root -> root.compareTo(pointValue) }
+            if (searchResult >= 0) {
+                error("The point $pointValue of $point is also a root in $roots. This should not happen!")
+            } else {
+                // (-result - 1) is index of first element which is larger than pointValue, hence the index
+                // of our cell is the index of one root below (we should never get that insertion index
+                // is 0 or roots.size, because that means the point is outside the variable bounds
+                result[d] = (-searchResult - 1) - 1
+                for (e in (d+1) until dimensions) {
+                    evalLevels[e].replaceAll { p -> p.evaluate(d, pointValue) }
                 }
             }
         }
@@ -242,19 +241,9 @@ class LevelGraph private constructor(
             val interval = bounds.data[d]
             // The first item of levels should depend only on dimension d
             val levelPolynomials = remainingLevels.first().map { it.asUnivariate() }
-            var precision = Q.parse("1/100")
-            var roots: List<Interval>? = null
-            while (roots == null) {
-                roots = DescartWithPolyFactorisationRootIsolation
-                    .isolateRootsInBounds(levelPolynomials, interval, precision)
-                    .sortedBy { it.low }
-                // in fact, since bound polynomials should be part of this, we should always get dimBounds as roots too
-                if (roots.first().isNumber() && roots.first().low != interval.low) roots = null
-                if (roots != null && roots.last().isNumber() && roots.last().low != interval.high) roots = null
-                precision = precision.div(ten)
-            }
+            val roots = AdaptiveRootIsolation.isolateRootsInBounds(levelPolynomials, interval).toList()
             for (cell in 0 until (roots.size - 1)) { // n thresholds defines n-1 cells
-                val cellMiddle = roots[cell].high + ((roots[cell + 1].low - roots[cell].high) / 2)
+                val cellMiddle = roots[cell].middleValue(roots[cell + 1])
                 workStack.add(
                     Triple(
                         // partially evaluate all level polynomials at this point

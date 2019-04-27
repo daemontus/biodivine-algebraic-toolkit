@@ -95,6 +95,7 @@ fun main() {
                     println("$s / ${ts.states.size}")
                     //println("In state ${ts.states[s]} can reach large ${efNotSmall.get(s)}")
                     notAG = notAG or efNotSmall.get(s).not()
+                    //if (s % 10 == 0) notAG = notAG.simplify()
                 }
                 println("Not AG: $notAG")
 

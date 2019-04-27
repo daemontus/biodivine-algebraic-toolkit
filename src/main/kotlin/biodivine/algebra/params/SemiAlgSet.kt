@@ -117,31 +117,24 @@ class SemiAlgSolver(
 
     fun SemiAlgSet.simplify(): SemiAlgSet {
         var simplified = this
-        val checkCells = levelGraph.walkCells().toList()
-        for (poly in this.levelGraph.basis) {
-            //println("Try to remove $poly")
+        val checkCells = levelGraph.walkCells()
+        poly@ for (poly in this.levelGraph.basis) {
             val removed = simplified.levelGraph - poly
             val valid = HashSet<Cell>()
             val invalid = HashSet<Cell>()
-            checkCells.forEach { (point, cell) ->
-                try {
-                    val cellInRemoved = removed.cellForPoint(point)
-                    if (cell in validCells) {
-                        valid.add(cellInRemoved)
-                    } else {
-                        invalid.add(cellInRemoved)
-                    }
-                } catch (e: IllegalStateException) {
-                    println("Level graph is $levelGraph")
-                    println("After simplification, the graph is $removed")
-                    throw e
+            for ((point, cell) in checkCells) {
+                val cellInRemoved = removed.cellForPoint(point)
+                if (cell in validCells) {
+                    // cell should be valid - if we found it in invalid before, this simplification is not safe
+                    if (cellInRemoved in invalid) continue@poly
+                    valid.add(cellInRemoved)
+                } else {
+                    // cell should be invalid - if we found it in valid before, this simplification is not safe
+                    if (cellInRemoved in valid) continue@poly
+                    invalid.add(cellInRemoved)
                 }
             }
-            if (valid.intersect(invalid).isEmpty()) {
-                //println("$poly is redundant")
-                // removed polynomial is redundant - there is no intersection between valid and invalid cells
-                simplified = SemiAlgSet(removed, valid)
-            }
+            simplified = SemiAlgSet(removed, valid)
         }
         return simplified
     }

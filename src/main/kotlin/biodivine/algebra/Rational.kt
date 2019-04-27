@@ -4,7 +4,7 @@ package biodivine.algebra
 import kotlin.math.max
 
 /**
- * Rational number is a fraction of two infinite precision integral numbers.
+ * Rational number is a fraction of two infinite error integral numbers.
  *
  * Ideally, the two numbers should always be co-prime, however, in order to avoid expensive
  * division/remainder operations, we can defer this type of normalisation for later.
