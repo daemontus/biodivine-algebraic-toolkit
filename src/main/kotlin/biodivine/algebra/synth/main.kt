@@ -1,13 +1,19 @@
 package biodivine.algebra.synth
 
 import biodivine.algebra.ia.Interval
+import biodivine.algebra.ia.draw
 import cc.redberry.rings.Rational
 import cc.redberry.rings.Rings
 import java.io.File
+import javax.imageio.ImageIO
+import kotlin.system.measureTimeMillis
+
+val two = Rings.Q.parse("2")
+val ten = Rings.Q.parse("10")
 
 fun main() {
     val ring = Rings.MultivariateRingQ(4)
-    val parser = ring.mkCoder("x", "y", "p", "q")
+    val parser = ring.mkCoder("p", "q", "x", "y")
     val polyX = run {
         val p1 = parser.parse("1/10 * x")
         val p2 = parser.parse("1/2")
@@ -36,27 +42,29 @@ fun main() {
         val m3 = r2.multiply(r3)
         m2.add(m3).add(kp).subtract(p1)
     }
+
+    println("PolyY: ${polyY}")
     
     val model = Model(
         ring = ring,
-        varNum = 2, varBounds = Box(Interval(Rings.Q.parse("1/10"), Rings.Q.parse("10")), Interval(Rings.Q.parse("1/10"), Rings.Q.parse("10"))),
+        varNum = 2, varBounds = Box(Interval(Rings.Q.parse("1/2"), Rings.Q.parse("10")), Interval(Rings.Q.parse("1/2"), Rings.Q.parse("10"))),
         paramNum = 2, paramBounds = Box(Interval(3, 5), Interval(4,6)),
         equations = listOf(polyX, polyY)
     )
 
     val ss = model.computeStateSpace(/*listOf(
-        Box(Interval(Rings.Q.parse("1/10"), Rings.Q.parse("10")), Interval(Rings.Q.parse("1/10"), Rings.Q.parse("2"))),
-        Box(Interval(Rings.Q.parse("1/10"), Rings.Q.parse("10")), Interval(Rings.Q.parse("2"), Rings.Q.parse("10")))
-    )*/listOf(model.varBounds), Rings.Q.parse("1/100000"))
+        Box(Interval(Rings.Q.parse("0"), Rings.Q.parse("10")), Interval(Rings.Q.parse("0"), Rings.Q.parse("2"))),
+        Box(Interval(Rings.Q.parse("0"), Rings.Q.parse("10")), Interval(Rings.Q.parse("2"), Rings.Q.parse("10")))
+    )*/listOf(model.varBounds), Rings.Q.parse("1/10000"), Rings.Q.parse("1/1000"))
     println("States: ${ss.size}")
 
-    val two = Rings.Q.parse("2")
     val notSmall = ss.indices.filter { i ->
         val b = ss[i]
-        b.data[1].high > two
+        //b.data[1].high > two
+        b.data[1].low < two
     }.toSet()
 
-    val imageProp = PropertySpace(ss, notSmall).draw().normalize(Rings.Q.parse("1000"))
+    /*val imageProp = PropertySpace(ss, notSmall).draw().normalize(Rings.Q.parse("1000"))
     File("notSmall.svg").bufferedWriter().use { imageProp.writeTo(it) }
 
     val image = ss.draw().normalize(Rings.Q.parse("1000"))
@@ -68,5 +76,33 @@ fun main() {
 
     val canReachNotSmall = ts.reachBackward(notSmall)
     val imageCanReach = PropertySpace(ss, canReachNotSmall).draw().normalize(Rings.Q.parse("1000"))
-    File("canReach.svg").bufferedWriter().use { imageCanReach.writeTo(it) }
+    File("canReach.svg").bufferedWriter().use { imageCanReach.writeTo(it) }*/
+
+    val elapsed = measureTimeMillis {
+        val ts = model.makeSemiAlgTransitions(ss)
+        ts.run {
+            val initial = ConcurrentArrayStateMap(ts.states.size, solver)
+            for (s in notSmall) { initial.union(s, solver.one) }
+
+            // AG small = ! EF ! small
+            val efNotSmall = initial.reachBackward()
+
+            println("Reachability done.")
+
+            solver.run {
+                var notAG = zero
+                for (s in 0 until ts.states.size) {
+                    println("$s / ${ts.states.size}")
+                    //println("In state ${ts.states[s]} can reach large ${efNotSmall.get(s)}")
+                    notAG = notAG or efNotSmall.get(s).not()
+                }
+                println("Not AG: $notAG")
+
+                val image = notAG.draw(model.paramBounds.data[0], model.paramBounds.data[1], 500, 500)
+                ImageIO.write(image, "PNG", File("out.png"))
+            }
+        }
+    }
+
+    println("Making transitions: $elapsed")
 }

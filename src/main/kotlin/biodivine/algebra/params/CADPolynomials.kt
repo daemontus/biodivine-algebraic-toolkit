@@ -12,7 +12,7 @@ import cc.redberry.rings.poly.multivar.MonomialOrder
 import cc.redberry.rings.poly.multivar.MultivariatePolynomial
 import cc.redberry.rings.poly.univar.UnivariateResultants
 
-val ISOLATE_PRECISION = Rings.Q.parse("1/100")
+val ISOLATE_PRECISION = Rings.Q.parse("1/10000000")
 
 /**
  *

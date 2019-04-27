@@ -3,15 +3,13 @@ package biodivine.algebra.ia
 import biodivine.algebra.MPoly
 import biodivine.algebra.NumQ
 import biodivine.algebra.UPoly
+import biodivine.algebra.params.SemiAlgSet
 import biodivine.algebra.project
 import cc.redberry.rings.Rational
 import cc.redberry.rings.Rings
-import cc.redberry.rings.bigint.BigInteger
-import cc.redberry.rings.poly.univar.UnivariatePolynomial
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.File
-import java.lang.IllegalStateException
 import javax.imageio.ImageIO
 
 
@@ -34,10 +32,19 @@ fun MPoly.evaluate(vararg x: Interval): Interval {
             1 -> x
             2 -> x*x
             else -> {
-                powCache.computeIfAbsent(x to e) { _ ->
+                val exp = powCache[x to e]
+                if (exp == null) {
+                    val a = pow(x, e/2)
+                    val computed = if (e % 2 == 0) a*a else a*a*x
+                    powCache[x to e] = computed
+                    computed
+                } else {
+                    exp
+                }
+                /*powCache.computeIfAbsent(x to e) { _ ->
                     val a = pow(x, e/2)
                     if (e % 2 == 0) a*a else a*a*x
-                }
+                }*/
             }
         }
     }
@@ -57,7 +64,7 @@ fun MPoly.evaluate(vararg x: Interval): Interval {
 }
 
 fun Rational<MPoly>.evaluate(vars: Array<Interval>, params: Array<Interval>): Interval {
-    return this.evaluate(*(vars + params))
+    return this.evaluate(*(params + vars))
 }
 
 fun Rational<MPoly>.evaluate(vararg x: Interval): Interval {
@@ -66,10 +73,11 @@ fun Rational<MPoly>.evaluate(vararg x: Interval): Interval {
     return numerator / denominator
 }
 
-fun MPoly.draw(x: Interval, y: Interval, pixelsX: Int, pixelsY: Int): BufferedImage {
+fun MPoly.draw(x: Interval, y: Interval, pixelsX: Int, pixelsY: Int,
+               image: BufferedImage = BufferedImage(pixelsX, pixelsY, BufferedImage.TYPE_INT_RGB)
+): BufferedImage {
     val stepX = x.size / pixelsX
     val stepY = y.size / pixelsY
-    val image = BufferedImage(pixelsX, pixelsY, BufferedImage.TYPE_INT_RGB);
     var min = Rings.Q.zero
     var max = Rings.Q.zero
     val values: Array<Array<Interval>> = Array(pixelsX) { i ->
@@ -82,7 +90,7 @@ fun MPoly.draw(x: Interval, y: Interval, pixelsX: Int, pixelsY: Int): BufferedIm
             res
         }
     }
-    for (i in 0 until pixelsX) {
+    /*for (i in 0 until pixelsX) {
         for (j in 0 until pixelsY) {
             val res = values[i][j]
             when {
@@ -101,6 +109,14 @@ fun MPoly.draw(x: Interval, y: Interval, pixelsX: Int, pixelsY: Int): BufferedIm
                 else -> {
                     image.setRGB(i, j, Color.white.rgb)
                 }
+            }
+        }
+    }*/
+    for (i in 0 until pixelsX) {
+        for (j in 0 until pixelsX) {
+            val res = values[i][j]
+            if (res.low < Rings.Q.zero && res.high > Rings.Q.zero) {
+                image.setRGB(i, j, Color.white.rgb)
             }
         }
     }
@@ -147,6 +163,38 @@ fun Rational<MPoly>.draw(x: Interval, y: Interval, pixelsX: Int, pixelsY: Int): 
             }
         }
     }
+    return image
+}
+
+fun NumQ.mapInto(bounds: Interval, max: Int): Int {
+    // get a number in [0..max] which corresponds to the position in bounds interval
+    val scale = ((this - bounds.low) / (bounds.high - bounds.low)) * max
+    return scale.numerator().divide(scale.denominator()).toLong().toInt()
+}
+
+fun SemiAlgSet.draw(x: Interval, y: Interval, pixelsX: Int, pixelsY: Int): BufferedImage {
+    val stepX = x.size / pixelsX
+    val stepY = y.size / pixelsY
+    val image = BufferedImage(pixelsX, pixelsY, BufferedImage.TYPE_INT_RGB);
+    this.levelGraph.basis.forEach {
+        it.draw(x, y, pixelsX, pixelsY, image)
+    }
+    this.levelGraph.walkCells().forEach { (point, cell) ->
+        println("Cell $cell for $point is ${cell in validCells}")
+        if (cell in validCells) {
+            image.setRGB(point[0].mapInto(x, pixelsX), point[1].mapInto(y, pixelsY), Color.green.rgb)
+        }
+    }
+    /*for (i in 0 until pixelsX) {
+        println("Pixel $i/$pixelsX")
+        for (j in 0 until pixelsY) {
+            val point = listOf(x.low + stepX*i, y.low + stepY*j)
+            val cell = this.levelGraph.cellForPoint(point)
+            if (cell in validCells) {
+                image.setRGB(i, j, Color.BLACK.rgb)
+            }
+        }
+    }*/
     return image
 }
 

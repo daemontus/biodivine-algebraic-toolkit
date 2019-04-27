@@ -5,12 +5,17 @@ import biodivine.algebra.ia.Interval
 import biodivine.algebra.synth.Box
 import cc.redberry.rings.Rings
 import cc.redberry.rings.poly.IPolynomialRing
+import java.lang.IllegalStateException
 import java.util.*
+import kotlin.collections.HashSet
 import kotlin.system.measureTimeMillis
 
 data class Cell(
     private val coordinates: IntArray
 ) {
+
+    fun project(retain: Int) = Cell(coordinates.take(retain).toIntArray())
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -52,7 +57,7 @@ class SemiAlgSolver(
 
     val zero: SemiAlgSet = SemiAlgSet(LevelGraph(emptyList(), ring, bounds), emptySet())
     // if there are no bounds, there is only one cell: the whole box - all coordinates zero
-    val one: SemiAlgSet = SemiAlgSet(LevelGraph(emptyList(), ring, bounds), setOf(Cell(IntArray(dimensions))))
+    val one: SemiAlgSet = SemiAlgSet(LevelGraph(emptyList(), ring, bounds), setOf(Cell(IntArray(dimensions)))).also { println("One: $it") }
 
     /*
         General overview of the operations:
@@ -89,10 +94,11 @@ class SemiAlgSolver(
                 if (cellInThat in that.validCells) cell else null
             }
         }.toSet()
-        return SemiAlgSet(levelUnion, validDisjunction)
+        return SemiAlgSet(levelUnion, validDisjunction).simplify()
     }
 
     infix fun SemiAlgSet.and(that: SemiAlgSet): SemiAlgSet {
+        if (this.validCells.isEmpty() || that.validCells.isEmpty()) return zero
         val levelUnion = LevelGraph(this.levelGraph, that.levelGraph)
         val validIntersection = levelUnion.walkCells().mapNotNull { (point, cell) ->
             val cellInThis = this.levelGraph.cellForPoint(point)
@@ -101,12 +107,54 @@ class SemiAlgSolver(
                 if (cellInThat !in that.validCells) null else cell
             }
         }.toSet()
-        return SemiAlgSet(levelUnion, validIntersection)
+        return SemiAlgSet(levelUnion, validIntersection).simplify()
     }
 
     fun SemiAlgSet.not(): SemiAlgSet {
         val negated = levelGraph.walkCells().mapNotNull { (_, cell) -> cell.takeIf { it !in validCells } }.toSet()
         return SemiAlgSet(levelGraph, negated)
+    }
+
+    fun SemiAlgSet.simplify(): SemiAlgSet {
+        var simplified = this
+        val checkCells = levelGraph.walkCells().toList()
+        for (poly in this.levelGraph.basis) {
+            //println("Try to remove $poly")
+            val removed = simplified.levelGraph - poly
+            val valid = HashSet<Cell>()
+            val invalid = HashSet<Cell>()
+            checkCells.forEach { (point, cell) ->
+                try {
+                    val cellInRemoved = removed.cellForPoint(point)
+                    if (cell in validCells) {
+                        valid.add(cellInRemoved)
+                    } else {
+                        invalid.add(cellInRemoved)
+                    }
+                } catch (e: IllegalStateException) {
+                    println("Level graph is $levelGraph")
+                    println("After simplification, the graph is $removed")
+                    throw e
+                }
+            }
+            if (valid.intersect(invalid).isEmpty()) {
+                //println("$poly is redundant")
+                // removed polynomial is redundant - there is no intersection between valid and invalid cells
+                simplified = SemiAlgSet(removed, valid)
+            }
+        }
+        return simplified
+    }
+
+    /**
+     * Create a projection of the semi-algebraic set, retaining only the first [retain] variables.
+     */
+    fun SemiAlgSet.project(retain: Int, reducedRing: IPolynomialRing<MPoly>? = null): SemiAlgSet {
+        val levelProjection = LevelGraph(this.levelGraph, retain, reducedRing)
+        val validityProjection = this.validCells.mapTo(HashSet()) { cell ->
+            cell.project(retain)
+        }
+        return SemiAlgSet(levelProjection, validityProjection)
     }
 
     fun SemiAlgSet.isEmpty(): Boolean = this.validCells.isEmpty()

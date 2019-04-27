@@ -11,7 +11,7 @@ val coder = Rings.UnivariateRingQ.mkCoder("x")
 /**
  * TODO: Here, we assume this goes up to degree 10 - fix it to be universal
  */
-private val normalizationFactors = (0..10).map { coder.parse("(1 + x)^$it") }
+private val normalizationFactors = (0..50).map { coder.parse("(1 + x)^$it") }
 
 /***
  * transform polynomial p by formula : (1 + x)^n * p( (ax + b) / (1 + x))

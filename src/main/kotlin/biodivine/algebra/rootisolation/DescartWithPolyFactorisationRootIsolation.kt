@@ -7,6 +7,7 @@ import biodivine.algebra.getDefaultBoundForDescartMethod
 import biodivine.algebra.getNumberOfSignChanges
 import biodivine.algebra.ia.Interval
 import biodivine.algebra.transformPolyToInterval
+import cc.redberry.rings.poly.PolynomialMethods.Factor
 
 object DescartWithPolyFactorisationRootIsolation : RootIsolation {
 
@@ -18,8 +19,10 @@ object DescartWithPolyFactorisationRootIsolation : RootIsolation {
         val computedRoots = mutableListOf<Interval>()
         for (poly in UnivariateFactorization.Factor(polynomial)) {
             if (poly.isLinearExactly) {
-                if (poly[0].negate() in bounds) {
-                    computedRoots += Interval(poly[0].negate(), poly[0].negate())
+                val root = poly[0].negate().divide(poly[1])
+                //println("Poly $poly is linear and root is $root")
+                if (root in bounds) {
+                    computedRoots += Interval(root, root)
                 }
             } else {
                 computedRoots += isolateIrracionalRootsRecursively(poly, bounds, precision)
@@ -43,9 +46,13 @@ object DescartWithPolyFactorisationRootIsolation : RootIsolation {
             val middleValue = (upperBound.add(lowerBound)).divide(BigInteger.TWO)
             val actualPrecision = (upperBound.subtract(lowerBound)).divide(BigInteger.TWO)
 
+            if (polynomial.evaluate(middleValue).isZero) {
+                result.add(Interval(middleValue, middleValue))
+            }
+
             when {
                 numberOfSignChangesInInterval == 0 -> Unit
-                numberOfSignChangesInInterval == 1 && precision > actualPrecision -> {
+                numberOfSignChangesInInterval == 1 && precision > actualPrecision && lowerBound != bounds.low && upperBound != bounds.high -> {
                     result.add(Interval(lowerBound, upperBound))
                 }
                 else -> {
@@ -57,4 +64,21 @@ object DescartWithPolyFactorisationRootIsolation : RootIsolation {
         return result
     }
 
+    override fun isolateRootsInBounds(
+        polynomials: Collection<UnivariatePolynomial<NumQ>>,
+        bounds: Interval,
+        precision: NumQ
+    ): List<Interval> {
+        val factors = polynomials.flatMapTo(HashSet()) { Factor(it) }
+        val linearRoots = factors.filter { it.isLinearExactly }.mapNotNull { poly ->
+            val root = poly[0].negate().divide(poly[1])
+            if (root !in bounds) null else Interval(root, root)
+        }
+        //val nonLinearCombination = factors.filter { !it.isLinearExactly }
+            //.fold(UnivariatePolynomial.one(polynomials.first().ring)) { a, b -> a.multiply(b) }
+        val nonLinearRoots = factors.filter { !it.isLinearExactly }.flatMap {
+            isolateIrracionalRootsRecursively(it, bounds, precision)
+        }.toHashSet()
+        return linearRoots + nonLinearRoots
+    }
 }

@@ -2,11 +2,17 @@ package biodivine.algebra.params
 
 import biodivine.algebra.MPoly
 import biodivine.algebra.NumQ
+import biodivine.algebra.ia.Interval
 import biodivine.algebra.ia.div
 import biodivine.algebra.ia.minus
 import biodivine.algebra.ia.plus
 import biodivine.algebra.rootisolation.DescartWithPolyFactorisationRootIsolation
 import biodivine.algebra.synth.Box
+import biodivine.algebra.synth.ten
+import biodivine.algebra.synth.two
+import cc.redberry.rings.Rational
+import cc.redberry.rings.Rings
+import cc.redberry.rings.Rings.Q
 import cc.redberry.rings.poly.IPolynomialRing
 import cc.redberry.rings.poly.univar.UnivariateResultants
 
@@ -28,7 +34,7 @@ import cc.redberry.rings.poly.univar.UnivariateResultants
  * Note that we also automatically prune all polynomials that we can prove are sign-invariant
  * in the given bounding box.
  */
-class LevelGraph(
+class LevelGraph private constructor(
     private val ring: IPolynomialRing<MPoly>,
     private val bounds: Box
 ) {
@@ -38,6 +44,8 @@ class LevelGraph(
     private val levels: List<MutableSet<MPoly>> = (1..dimensions).map { HashSet<MPoly>() }
     private val dependencies: MutableList<Dependency> = ArrayList()
 
+    private val boundPolynomials: MutableSet<MPoly> = HashSet()
+
     init {
         // Ensure dimension bounds are included
         val parser = ring.mkCoder(*(0 until dimensions).map { "x$it" }.toTypedArray())
@@ -45,6 +53,8 @@ class LevelGraph(
             val low = parser.parse("x$d - ${bounds.data[d].low}")
             val high = parser.parse("x$d - ${bounds.data[d].high}")
             insert(low); insert(high)
+            boundPolynomials.add(low)
+            boundPolynomials.add(high)
         }
     }
 
@@ -53,7 +63,7 @@ class LevelGraph(
     }
 
     constructor(graph1: LevelGraph, graph2: LevelGraph): this(graph1.ring, graph1.bounds) {
-        if (graph1.ring != graph2.ring || graph1.bounds != graph2.bounds) error("Incompatible graphs: $graph1, $graph2")
+        if (graph1.ring != graph2.ring || graph1.bounds != graph2.bounds) error("Incompatible graphs: $graph1, $graph2; ${graph1.ring} ${graph2.ring}; ${graph1.bounds} ${graph2.bounds}")
         this.dependencies.addAll((graph1.dependencies + graph2.dependencies).toSet())   // copy dependencies
         graph1.levels.forEach { level -> level.forEach { insert(it) } }
         graph2.levels.forEach { level -> level.forEach { insert(it) } }
@@ -71,11 +81,49 @@ class LevelGraph(
     }
 
     /**
+     * Produce a level graph which is a projection of this graph to the first [retain] variables.
+     */
+    constructor(graph: LevelGraph, retain: Int, reducedRing: IPolynomialRing<MPoly>? = null): this(
+        reducedRing ?: Rings.MultivariateRingQ(retain), graph.bounds.project(retain)
+    ) {
+        // copy levels, but only the ones we want to retain and set their number of variables accordingly
+        this.levels.forEachIndexed { l, level ->
+            graph.levels[l].forEach { poly ->
+                level.add(poly.setNVariables(retain))
+            }
+        }
+
+        // Now this is a little nasty, because for each dependency, we also have to drop the number of variables
+        // in each polynome
+        // Only keep dependencies where the source level is still applicable to projected data set.
+        val newDependencies = graph.dependencies.mapNotNull {
+            when (it) {
+                is Dependency.Single -> {
+                    if (it.source.level >= retain) null else {
+                        Dependency.Single(it.source.setNVariables(retain), it.target.setNVariables(retain))
+                    }
+                }
+                is Dependency.Combination -> {
+                    if (it.source1.level >= retain || it.source2.level >= retain) null else {
+                        Dependency.Combination(
+                            it.source1.setNVariables(retain),
+                            it.source2.setNVariables(retain),
+                            it.target.setNVariables(retain))
+                    }
+                }
+            }
+        }
+        dependencies.addAll(newDependencies)
+    }
+
+    /**
      * Computes the polynomials which have no dependencies in the level graph, i.e. the original
      * graph can be generated using this set.
      */
     val basis: List<MPoly>
-        get() = levels.toList().flatten().filter { poly -> dependencies.all { it.target != poly } }
+        get() = levels.toList().flatten().filter { poly ->
+            poly !in boundPolynomials && dependencies.all { it.target != poly }
+        }
 
     private fun insert(poly: MPoly) {
         // note that the function is recursive, but the depth is always small (number of dimensions)
@@ -138,24 +186,20 @@ class LevelGraph(
         for (d in 0 until dimensions) {
             val interval = bounds.data[d]
             val levelPolynomials = evalLevels[d].map { it.asUnivariate() }  // it this point, level d should be univariate
-            val roots = DescartWithPolyFactorisationRootIsolation
-                .isolateRootsInBounds(levelPolynomials, interval, ISOLATE_PRECISION)
-                /*.isolateRoots(levelPolynomials, ISOLATE_PRECISION)
-                .toSet()    // there might be duplicates - shouldn't due to factoring, but can be
-                .filter { root ->
-                    // Here, we handle some edge cases - ideally, you would refine these roots further, but at this point
-                    // we just hope we don't have to. If you run into this issue, just increase ISOLATE_PRECISION
-                    if (root.low < interval.low && root.high > interval.low) error("Root crosses boundary")
-                    if (root.low < interval.high && root.high > interval.high) error("Root crosses boundary")
-                    root.low >= interval.low && root.high <= interval.high    // exclude roots which fall outside of the interval
-                }*/
-                .sortedBy { it.low }
+            var precision = Q.parse("1/100")
+            var roots: List<Interval>? = null
             val pointValue = point[d]
-            // in fact, since bound polynomials should be part of this, we should always get dimBounds as roots too
-            if (roots.first().low != roots.first().high && roots.first().low != interval.low) error("WTF: bounds missing")
-            if (roots.last().low != roots.last().high && roots.last().low != interval.high) error("WTF: bounds missing")
-            // If the requested point falls too close to a root, we also fail, but we should refine the interval instead.
-            if (roots.any { pointValue in it }) error("Point inside root interval :(")
+            while (roots == null) {
+                roots = DescartWithPolyFactorisationRootIsolation
+                    .isolateRootsInBounds(levelPolynomials, interval, precision)
+                    .sortedBy { it.low }
+                // in fact, since bound polynomials should be part of this, we should always get dimBounds as roots too
+                if (roots.first().low != roots.first().high && roots.first().low != interval.low) roots = null//error("WTF: bounds missing")
+                if (roots != null && roots.last().low != roots.last().high && roots.last().low != interval.high) roots = null//error("WTF: bounds missing")
+                // If the requested point falls too close to a root, we also fail, but we should refine the interval instead.
+                if (roots != null && roots.any { pointValue in it }) roots = null//error("Point inside root interval :( point $point in $roots for dim $d")
+                precision = precision.div(ten)
+            }
             // TODO: Here, we should be using binary search because the number of roots can be high
             for (cell in 0 until (roots.size - 1))  {   // n thresholds defines n-1 cells
                 val cellLow = roots[cell]
@@ -198,19 +242,17 @@ class LevelGraph(
             val interval = bounds.data[d]
             // The first item of levels should depend only on dimension d
             val levelPolynomials = remainingLevels.first().map { it.asUnivariate() }
-            val roots = DescartWithPolyFactorisationRootIsolation
-                .isolateRootsInBounds(levelPolynomials, interval, ISOLATE_PRECISION)
-                /*.isolateRoots(levelPolynomials, ISOLATE_PRECISION)
-                .toSet()    // there might be duplicates - shouldn't due to factoring, but can be
-                .filter { root ->
-                    if (root.low < interval.low && root.high > interval.low) error("Root crosses boundary")
-                    if (root.low < interval.high && root.high > interval.high) error("Root crosses boundary")
-                    root.low >= interval.low && root.high <= interval.high
-                }*/
-                .sortedBy { it.low }
-            // in fact, since bound polynomials should be part of this, we should always get dimBounds as roots too
-            if (roots.first().isNumber() && roots.first().low != interval.low) error("WTF: bounds missing")
-            if (roots.last().isNumber() && roots.last().low != interval.high) error("WTF: bounds missing")
+            var precision = Q.parse("1/100")
+            var roots: List<Interval>? = null
+            while (roots == null) {
+                roots = DescartWithPolyFactorisationRootIsolation
+                    .isolateRootsInBounds(levelPolynomials, interval, precision)
+                    .sortedBy { it.low }
+                // in fact, since bound polynomials should be part of this, we should always get dimBounds as roots too
+                if (roots.first().isNumber() && roots.first().low != interval.low) roots = null
+                if (roots != null && roots.last().isNumber() && roots.last().low != interval.high) roots = null
+                precision = precision.div(ten)
+            }
             for (cell in 0 until (roots.size - 1)) { // n thresholds defines n-1 cells
                 val cellMiddle = roots[cell].high + ((roots[cell + 1].low - roots[cell].high) / 2)
                 workStack.add(
@@ -249,6 +291,7 @@ class LevelGraph(
     }
 
     override fun toString(): String {
+        //return "LevelGraph(levels=$levels, dependencies=$dependencies)"
         return "LevelGraph(levels=$levels)"
     }
 
@@ -270,13 +313,13 @@ class LevelGraph(
 
 
     sealed class Dependency {
-        data class Single(private val source: MPoly, override val target: MPoly) : Dependency() {
+        data class Single(val source: MPoly, override val target: MPoly) : Dependency() {
             override fun checkDiscriminant(source: MPoly): Boolean = this.source == source
             override fun checkCombination(source1: MPoly, source2: MPoly): Boolean = false
             override fun isDependencyOf(poly: MPoly): Boolean = source == poly
         }
 
-        data class Combination(private val source1: MPoly, private val source2: MPoly, override val target: MPoly) : Dependency() {
+        data class Combination(val source1: MPoly, val source2: MPoly, override val target: MPoly) : Dependency() {
             override fun checkDiscriminant(source: MPoly): Boolean = false
             override fun checkCombination(source1: MPoly, source2: MPoly): Boolean {
                 return (this.source1 == source1 && this.source2 == source2) || (this.source1 == source2 && this.source2 == source1)

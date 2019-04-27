@@ -50,6 +50,10 @@ class Box(
         return result
     }
 
+    fun project(retain: Int) = Box(*data.take(retain).toTypedArray())
+    fun extend(other: Box) = Box(*(data + other.data))
+    fun eliminate(dimension: Int) = Box(*(data.take(dimension) + data.drop(dimension + 1)).toTypedArray())
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

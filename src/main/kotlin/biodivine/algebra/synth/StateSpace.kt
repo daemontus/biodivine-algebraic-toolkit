@@ -5,13 +5,19 @@ import biodivine.algebra.ia.div
 import biodivine.algebra.ia.evaluate
 import biodivine.algebra.ia.plus
 import biodivine.algebra.ia.times
+import biodivine.algebra.params.LevelGraph
+import biodivine.algebra.params.SemiAlgSet
+import biodivine.algebra.params.SemiAlgSolver
 import biodivine.algebra.svg.*
 import cc.redberry.rings.Rings
+import cc.redberry.rings.Rings.Q
+import kotlin.system.exitProcess
 
-fun Model.computeStateSpace(initial: List<Box>, maxDivision: NumQ): List<Box> {
+fun Model.computeStateSpace(initial: List<Box>, maxDivision: NumQ, minDivision: NumQ): List<Box> {
     val result = ArrayList<Box>()
     val bounds = this.varBounds
     val smallest = bounds.volume * maxDivision
+    val largest = bounds.volume * minDivision
     var toResolve = initial
     var safeVolume = Rings.Q.zero
     var unsafeVolume = Rings.Q.zero
@@ -19,6 +25,9 @@ fun Model.computeStateSpace(initial: List<Box>, maxDivision: NumQ): List<Box> {
         val nextResolve = ArrayList<Box>()
         for (box in toResolve) {
             when {
+                box.volume > largest -> {
+                    nextResolve.addAll(box.subdivide())
+                }
                 box.volume < smallest -> {
                     //println("Unsafe: $box")
                     result.add(box)
@@ -87,6 +96,148 @@ fun List<Box>.makeTransitions(model: Model): RectTransitionSystem {
     println("Transitions: ${transitions.size}")
 
     return RectTransitionSystem(this, transitions)
+}
+
+fun Model.makeSemiAlgTransitions(states: List<Box>): SemiAlgTransitionSystem {
+    // Important: parameters are the first dimensions since we want to project to them later
+    val reducedRing = Rings.MultivariateRingQ(paramNum + varNum - 1)
+    val paramRing = Rings.MultivariateRingQ(paramNum)
+    val paramSolver = SemiAlgSolver(paramBounds, paramRing)
+
+    val transitions = ArrayList<Triple<Int, Int, SemiAlgSet>>()
+    val boxToIndex = states.mapIndexed { i, box -> box to i }.toMap()
+    var i = 0
+    for (state in states) {
+        i += 1
+        if (i % 100 == 0) println("Resolve transitions $i/${states.size}")
+        neighbour@ for (other in states) {
+            if (state === other) continue@neighbour
+            val print = false//boxToIndex.getValue(state) == 28 && boxToIndex.getValue(other) == 30
+            var transitionDimension = -1
+            for (d in 0 until varNum) {
+                if (!state.data[d].intersects(other.data[d])) {
+                    // if they do not intersect, they are not related!
+                    continue@neighbour
+                }
+                if (state.data[d].low == other.data[d].high || state.data[d].high == other.data[d].low) {
+                    if (transitionDimension > -1) {
+                        // these two boxes are already touching in other dimension, they can't touch in multiple
+                        continue@neighbour
+                    } else {
+                        transitionDimension = d
+                    }
+                }
+            }
+            // now check if the transition even can be enabled under some circumstances:
+            val facetBounds = Array(varNum) { d ->
+                (state.data[d] intersect other.data[d])!!
+            }
+            if (facetBounds[transitionDimension].low != facetBounds[transitionDimension].high) error("WTF?")
+            val possibleDerivatives = equations[transitionDimension].evaluate(facetBounds, paramBounds.data)
+            if (facetBounds[transitionDimension].low == state.data[transitionDimension].high) {
+                // we are going up from the state, so the derivative should be positive
+                if (possibleDerivatives.high > zero) {
+                    if (possibleDerivatives.low > zero) {
+                        // All parameters lead this way, so no CAD is needed
+                        transitions.add(
+                            Triple(boxToIndex.getValue(state), boxToIndex.getValue(other), paramSolver.one)
+                        )
+                    } else {
+                        // Now we actually create the set which enables the transition:
+                        // at this point, we assume the sign of the denominator is fixed, so we only care about the numerator
+                        val numerator = equations[transitionDimension].numerator()
+                        // this is the exact value of the transition dimension which we need to substitute
+                        val commonValue = facetBounds[transitionDimension].low
+                        // this is the equation that needs to be positive for our derivatives
+                        val condition = numerator.eliminate(paramNum + transitionDimension, commonValue)
+                        if (print) println("Condition is $condition")
+                        // make a decomposition of the whole system
+                        // TODO: We can make this more efficient by stripping away unused dimensions in sparse equations
+                        val cad = LevelGraph(
+                            listOf(condition),
+                            reducedRing,
+                            paramBounds.extend(Box(*facetBounds).eliminate(transitionDimension))
+                        )
+                        if (print) println("CAD: $cad")
+                        val cadProjected = LevelGraph(cad, paramNum, paramRing)
+                        if (print) println("CAD projected: $cadProjected")
+                        val validCells = cad.walkCells().mapNotNullTo(HashSet()) { (point, cell) ->
+                            val result = condition.evaluate(*point.toTypedArray())
+                            if (print) println("Cell $cell with $point evaluates to $result")
+                            if (result <= Q.zero) null else {
+                                cell.project(paramNum)
+                            }
+                        }
+                        paramSolver.run {
+                            val params = SemiAlgSet(cadProjected, validCells).simplify()
+                            if (print) println("Resulting params: $params")
+                            if (print) println("Basis: ${params.levelGraph.basis}")
+                            if (print) exitProcess(0)
+                            if (params.isNotEmpty()) {
+                                transitions.add(
+                                    Triple(boxToIndex.getValue(state), boxToIndex.getValue(other),params)
+                                )
+                                /*if (params.validCells.size > 1) {
+                                    println("Create a partial transition, because intervals give us $possibleDerivatives")
+                                    println("Common value $commonValue")
+                                    println("Transition from $state to $other with $params")
+                                    //exitProcess(0)
+                                }*/
+                            }
+                        }
+                    }
+                }
+            } else {
+                // we are going down from the state, so the derivative should be negative
+                if (possibleDerivatives.low < zero) {
+                    if (possibleDerivatives.high < zero) {
+                        // All parameters lead this way, so no CAD is needed
+                        transitions.add(
+                            Triple(boxToIndex.getValue(state), boxToIndex.getValue(other), paramSolver.one)
+                        )
+                    } else {
+                        val numerator = equations[transitionDimension].numerator()
+                        val commonValue = facetBounds[transitionDimension].low
+                        // this is the equation that needs to be negative for our derivatives
+                        val condition = numerator.eliminate(paramNum + transitionDimension, commonValue)
+                        // make a decomposition of the whole system
+                        val cad = LevelGraph(
+                            listOf(condition),
+                            reducedRing,
+                            paramBounds.extend(Box(*facetBounds).eliminate(transitionDimension))
+                        )
+                        //println("Original CAD: $cad")
+                        val cadProjected = LevelGraph(cad, paramNum, paramRing)
+                        //println("Projected CAD: $cadProjected")
+                        val validCells = cad.walkCells().mapNotNullTo(HashSet()) { (point, cell) ->
+                            val result = condition.evaluate(*point.toTypedArray())
+                            if (result >= Q.zero) null else {
+                                cell.project(paramNum)
+                            }
+                        }
+                        paramSolver.run {
+                            val params = SemiAlgSet(cadProjected, validCells).simplify()
+                            if (params.isNotEmpty()) {
+                                transitions.add(
+                                    Triple(boxToIndex.getValue(state), boxToIndex.getValue(other),params)
+                                )
+                                /*if (params.validCells.size > 1) {
+                                    println("1Create a partial transition, because intervals give us $possibleDerivatives")
+                                    println("Common value $commonValue")
+                                    println("Transition from $state to $other with $params")
+                                    //exitProcess(0)
+                                }*/
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    println("Transitions: ${transitions.size}")
+
+    return SemiAlgTransitionSystem(paramSolver, states, transitions)
 }
 
 fun List<Box>.draw(): SvgImage {
