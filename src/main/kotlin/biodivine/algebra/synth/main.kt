@@ -4,6 +4,7 @@ import biodivine.algebra.ia.Interval
 import biodivine.algebra.ia.draw
 import cc.redberry.rings.Rational
 import cc.redberry.rings.Rings
+import cc.redberry.rings.Rings.Q
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.system.measureTimeMillis
@@ -12,8 +13,8 @@ val two = Rings.Q.parse("2")
 val ten = Rings.Q.parse("10")
 
 fun main() {
-    val ring = Rings.MultivariateRingQ(4)
-    val parser = ring.mkCoder("p", "q", "x", "y")
+    val ring = Rings.MultivariateRingQ(5)
+    val parser = ring.mkCoder("p", "q", "k", "x", "y")
     val polyX = run {
         val p1 = parser.parse("1/10 * x")
         val p2 = parser.parse("1/2")
@@ -27,7 +28,7 @@ fun main() {
     }
 
     val polyY = run {
-        val kp = parser.parse("5/100")
+        val kp = parser.parse("k")
         val c1 = parser.parse("1 * 4/100 * 4/100 * 625/10000")
         val num1 = parser.parse("p^2")
         val den1 = parser.parse("y^2 + p^2")
@@ -48,7 +49,7 @@ fun main() {
     val model = Model(
         ring = ring,
         varNum = 2, varBounds = Box(Interval(Rings.Q.parse("1/2"), Rings.Q.parse("10")), Interval(Rings.Q.parse("1/2"), Rings.Q.parse("10"))),
-        paramNum = 2, paramBounds = Box(Interval(3, 5), Interval(4,6)),
+        paramNum = 3, paramBounds = Box(Interval(3, 5), Interval(4,6), Interval(Q.parse("1/100"), Q.parse("10/100"))),
         equations = listOf(polyX, polyY)
     )
 
@@ -99,8 +100,8 @@ fun main() {
                 }
                 println("Not AG: $notAG")
 
-                val image = notAG.draw(model.paramBounds.data[0], model.paramBounds.data[1], 500, 500)
-                ImageIO.write(image, "PNG", File("out.png"))
+                //val image = notAG.draw(model.paramBounds.data[0], model.paramBounds.data[1], 500, 500)
+                //ImageIO.write(image, "PNG", File("out.png"))
             }
         }
     }
