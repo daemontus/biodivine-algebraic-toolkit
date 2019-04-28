@@ -60,8 +60,8 @@ fun main() {
 
     val notSmall = ss.indices.filter { i ->
         val b = ss[i]
-        //b.data[1].high > two
-        b.data[1].low < two
+        b.data[1].high > two
+        //b.data[1].low < two
     }.toSet()
 
     /*val imageProp = PropertySpace(ss, notSmall).draw().normalize(Rings.Q.parse("1000"))

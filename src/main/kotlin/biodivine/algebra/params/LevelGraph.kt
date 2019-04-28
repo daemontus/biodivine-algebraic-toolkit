@@ -73,6 +73,19 @@ class LevelGraph private constructor(
         }
     }
 
+    constructor(graph: LevelGraph, exclude: List<MPoly>): this(graph.ring, graph.bounds) {
+        graph.levels.forEachIndexed { l, level ->
+            this.levels[l].addAll(level)
+        }
+        dependencies.addAll(graph.dependencies)
+        exclude.forEach { remove(it) }
+
+        if (levels[0].size > maxLevels) {
+            maxLevels = levels[0].size
+            println("New Max: $maxLevels $this")
+        }
+    }
+
     constructor(graph: LevelGraph, exclude: MPoly): this(graph.ring, graph.bounds) {
         if (exclude !in graph.levels[exclude.level]) error("Removing non-existent polynomial")
         // make copy of original graph
@@ -135,9 +148,12 @@ class LevelGraph private constructor(
      * graph can be generated using this set.
      */
     val basis: List<MPoly>
-        get() = levels.toList().flatten().filter { poly ->
+        get() = levels.flatten().filter { poly ->
             poly !in boundPolynomials && dependencies.all { it.target != poly }
         }
+
+    val polynomials: List<MPoly>
+        get() = levels.flatten().filter { poly -> poly !in boundPolynomials }
 
     private fun insert(poly: MPoly) {
         // note that the function is recursive, but the depth is always small (number of dimensions)
@@ -256,6 +272,46 @@ class LevelGraph private constructor(
                 )
             }
         }
+    }
+
+    fun nonRemovable(validCells: Set<Cell>): Set<MPoly> {
+        val essential = HashSet<MPoly>()
+        val workStack = ArrayList<Triple<List<Map<MPoly, MPoly>>, List<Int>, List<NumQ>>>()
+        workStack.add(Triple(levels.map { level -> level.map { p -> p to p }.toMap() }, emptyList(), emptyList()))
+        while (workStack.isNotEmpty()) {
+            val (remainingLevels, partialCell, partialPoint) = workStack.removeAt(workStack.lastIndex)
+            if (remainingLevels.isEmpty()) continue
+            val d = dimensions - remainingLevels.size
+            val interval = bounds.data[d]
+            val validCellsInCylinder = validCells.mapNotNullTo(HashSet()) { cell ->
+                cell.takeIf { it.hasPrefix(partialCell) }?.project(d + 1)?.toList()
+            }
+            val levelPolynomialMap = remainingLevels.first().mapKeys { it.key.asUnivariate() }
+            val roots = AdaptiveRootIsolation.isolateRootsInBounds(levelPolynomialMap.keys, interval).toList()
+            for (cell in 0 until (roots.size - 1)) {
+                val cellMiddle = roots[cell].middleValue(roots[cell + 1])
+                if (d == dimensions - 1 && cell + 1 != roots.size - 1) {   // check every cell except the last
+                    val boundaryPolynomial = levelPolynomialMap[roots[cell + 1].polynomial] ?: error("Missing polynomial for root ${roots[cell + 1]} in $levelPolynomialMap")
+                    val thisCellIsValid = (partialCell + cell) in validCellsInCylinder
+                    val nextCallIsValid = (partialCell + (cell + 1)) in validCellsInCylinder
+                    if (thisCellIsValid != nextCallIsValid) {
+                        essential.add(boundaryPolynomial)
+                    }
+                }
+                workStack.add(
+                    Triple(
+                        // partially evaluate all level polynomials at this point
+                        remainingLevels.drop(1).map { level -> level.mapKeys { it.key.copy().evaluate(d, cellMiddle) } },
+                        // add cell index to partial coordinates
+                        partialCell + cell,
+                        // add cell middle point to partial sample point
+                        partialPoint + cellMiddle
+                    )
+                )
+            }
+        }
+
+        return essential
     }
 
 

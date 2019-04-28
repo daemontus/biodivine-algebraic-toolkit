@@ -9,7 +9,6 @@ import biodivine.algebra.ia.minus
 import biodivine.algebra.ia.plus
 import biodivine.algebra.transformPolyToInterval
 import cc.redberry.rings.Rings
-import cc.redberry.rings.poly.univar.UnivariateSquareFreeFactorization
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashSet
@@ -28,7 +27,7 @@ object AdaptiveRootIsolation {
             .flatMapTo(HashSet()) { listOf(it)/*UnivariateSquareFreeFactorization.SquareFreeFactorization(it)*/ }    // first, find all unique factors
             .forEach { factor ->                                            // then, find roots for every factor
                 if (factor.isLinearExactly) {
-                    val root = Root.rational(factor)
+                    val root = Root.linear(factor)
                     if (root in bounds) result.add(root)
                 } else {
                     // due to initial interval, we know all roots are in bounds
@@ -45,7 +44,7 @@ object AdaptiveRootIsolation {
     }
 
     private fun isolateIrrationalRoots(polynomial: UPoly, initialInterval: Interval): List<Root> {
-        // At this point, we know there are no rational roots and that all roots we create are actually
+        // At this point, we know there are no linear roots and that all roots we create are actually
         // unique, but only for this polynomial!
         val roots = ArrayList<Root>()
         val queue = ArrayList<Interval>()
@@ -55,12 +54,12 @@ object AdaptiveRootIsolation {
             val signChanges = polynomial.transformPolyToInterval(low, high).getNumberOfSignChanges()
 
             when {
-                signChanges == 1 -> roots.add(Root.irrational(low, high, polynomial))
+                signChanges == 1 -> roots.add(Root.arbitrary(low, high, polynomial))
                 signChanges > 1 -> {
                     val middle = low + (high - low) / 2
 
                     if (middle.isRationalRoot(polynomial)) {
-                        roots.add(Root.irrational(middle, middle, polynomial))
+                        roots.add(Root.arbitrary(middle, middle, polynomial))
                     }
 
                     queue.add(Interval(low, middle))
@@ -69,8 +68,8 @@ object AdaptiveRootIsolation {
             }
         }
         val (low, high) = initialInterval
-        if (low.isRationalRoot(polynomial)) roots.add(Root.irrational(low, low, polynomial))
-        if (high.isRationalRoot(polynomial)) roots.add(Root.irrational(high, high, polynomial))
+        if (low.isRationalRoot(polynomial)) roots.add(Root.arbitrary(low, low, polynomial))
+        if (high.isRationalRoot(polynomial)) roots.add(Root.arbitrary(high, high, polynomial))
         return roots
     }
 

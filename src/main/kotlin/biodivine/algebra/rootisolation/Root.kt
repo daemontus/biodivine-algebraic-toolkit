@@ -15,7 +15,7 @@ import biodivine.algebra.transformPolyToInterval
  * This also makes this class thread unsafe!
  */
 class Root private constructor(
-    private val polynomial: UPoly,
+    val polynomial: UPoly,
     private var lowerBound: NumQ,
     private var upperBound: NumQ
 ) : Comparable<Root> {
@@ -25,15 +25,15 @@ class Root private constructor(
         /**
          * Create a rational root from a linear polynomial
          */
-        fun rational(polynomial: UPoly): Root {
+        fun linear(polynomial: UPoly): Root {
             val root = polynomial[0].negate().divide(polynomial[1])
             return Root(polynomial, root, root)
         }
 
         /**
-         * Create an irrational root
+         * Create an arbitrary root
          */
-        fun irrational(low: NumQ, high: NumQ, polynomial: UPoly): Root {
+        fun arbitrary(low: NumQ, high: NumQ, polynomial: UPoly): Root {
             return Root(polynomial, low, high)
         }
 

@@ -5,7 +5,6 @@ import biodivine.algebra.ia.Interval
 import biodivine.algebra.synth.Box
 import cc.redberry.rings.Rings
 import cc.redberry.rings.poly.IPolynomialRing
-import java.lang.IllegalStateException
 import java.util.*
 import kotlin.collections.HashSet
 import kotlin.system.measureTimeMillis
@@ -15,6 +14,15 @@ data class Cell(
 ) {
 
     fun project(retain: Int) = Cell(coordinates.take(retain).toIntArray())
+
+    fun hasPrefix(partialCell: List<Int>): Boolean {
+        for (i in partialCell.indices) {
+            if (partialCell[i] != coordinates[i]) return false
+        }
+        return true
+    }
+
+    fun toList(): List<Int> = coordinates.toList()
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -87,38 +95,46 @@ class SemiAlgSolver(
 
     infix fun SemiAlgSet.or(that: SemiAlgSet): SemiAlgSet {
         val levelUnion = LevelGraph(this.levelGraph, that.levelGraph)
-        val validDisjunction = levelUnion.walkCells().mapNotNull { (point, cell) ->
+        val validDisjunction = levelUnion.walkCells().mapNotNullTo(HashSet()) { (point, cell) ->
             val cellInThis = this.levelGraph.cellForPoint(point)
             if (cellInThis in this.validCells) cell else {
                 val cellInThat = that.levelGraph.cellForPoint(point)
                 if (cellInThat in that.validCells) cell else null
             }
-        }.toSet()
+        }
         return SemiAlgSet(levelUnion, validDisjunction).simplify()
     }
 
     infix fun SemiAlgSet.and(that: SemiAlgSet): SemiAlgSet {
         if (this.validCells.isEmpty() || that.validCells.isEmpty()) return zero
         val levelUnion = LevelGraph(this.levelGraph, that.levelGraph)
-        val validIntersection = levelUnion.walkCells().mapNotNull { (point, cell) ->
+        val validIntersection = levelUnion.walkCells().mapNotNullTo(HashSet()) { (point, cell) ->
             val cellInThis = this.levelGraph.cellForPoint(point)
             if (cellInThis !in this.validCells) null else {
                 val cellInThat = that.levelGraph.cellForPoint(point)
                 if (cellInThat !in that.validCells) null else cell
             }
-        }.toSet()
+        }
         return SemiAlgSet(levelUnion, validIntersection).simplify()
     }
 
     fun SemiAlgSet.not(): SemiAlgSet {
-        val negated = levelGraph.walkCells().mapNotNull { (_, cell) -> cell.takeIf { it !in validCells } }.toSet()
+        val negated = levelGraph.walkCells().mapNotNullTo(HashSet()) { (_, cell) -> cell.takeIf { it !in validCells } }
         return SemiAlgSet(levelGraph, negated)
     }
 
     fun SemiAlgSet.simplify(): SemiAlgSet {
-        var simplified = this
-        val checkCells = levelGraph.walkCells()
-        poly@ for (poly in this.levelGraph.basis) {
+        //var simplified = this
+        val toRemove = levelGraph.basis - (levelGraph.nonRemovable(validCells))
+        if (toRemove.isEmpty()) return this
+        val simplifiedLevelGraph = LevelGraph(this.levelGraph, toRemove)
+        val simplifiedValidCells = simplifiedLevelGraph.walkCells().mapNotNullTo(HashSet()) { (point, cell) ->
+            val originalCell = levelGraph.cellForPoint(point)
+            cell.takeIf { originalCell in validCells }
+        }
+        return SemiAlgSet(simplifiedLevelGraph, simplifiedValidCells)
+        /*val checkCells = levelGraph.walkCells()
+        poly@ for (poly in tryRemove) {
             val removed = simplified.levelGraph - poly
             val valid = HashSet<Cell>()
             val invalid = HashSet<Cell>()
@@ -126,17 +142,23 @@ class SemiAlgSolver(
                 val cellInRemoved = removed.cellForPoint(point)
                 if (cell in validCells) {
                     // cell should be valid - if we found it in invalid before, this simplification is not safe
-                    if (cellInRemoved in invalid) continue@poly
+                    if (cellInRemoved in invalid) {
+                        error("Noooooooooo")
+                        continue@poly
+                    }
                     valid.add(cellInRemoved)
                 } else {
                     // cell should be invalid - if we found it in valid before, this simplification is not safe
-                    if (cellInRemoved in valid) continue@poly
+                    if (cellInRemoved in valid) {
+                        error("Noooooooooo")
+                        continue@poly
+                    }
                     invalid.add(cellInRemoved)
                 }
             }
             simplified = SemiAlgSet(removed, valid)
         }
-        return simplified
+        return simplified*/
     }
 
     /**
