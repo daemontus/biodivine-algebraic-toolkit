@@ -340,21 +340,6 @@ class LevelGraph private constructor(
         return "LevelGraph(levels=$levels)"
     }
 
-    /**
-     * The highest variable which has a non-zero degree in the polynomial. Note that this is also the index
-     * of a variable where we want to do projections!
-     */
-    private val MPoly.level: Int
-        get() {
-            for (d in (nVariables - 1) downTo 0) {
-                if (degree(d) > 0) {
-                    // this is the highest d such that there is a non-zero degree there, so this is the level
-                    return d
-                }
-            }
-            return -1
-        }
-
 
 
     sealed class Dependency {
@@ -383,3 +368,19 @@ class LevelGraph private constructor(
 
 operator fun LevelGraph.plus(other: LevelGraph) = LevelGraph(this, other)
 operator fun LevelGraph.minus(exclude: MPoly) = LevelGraph(this, exclude)
+
+
+/**
+ * The highest variable which has a non-zero degree in the polynomial. Note that this is also the index
+ * of a variable where we want to do projections!
+ */
+val MPoly.level: Int
+    get() {
+        for (d in (nVariables - 1) downTo 0) {
+            if (degree(d) > 0) {
+                // this is the highest d such that there is a non-zero degree there, so this is the level
+                return d
+            }
+        }
+        return -1
+    }

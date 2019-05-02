@@ -15,7 +15,7 @@ import kotlin.collections.HashSet
 
 object AdaptiveRootIsolation {
 
-    private val rootIsolationCache = ThreadLocal.withInitial<LRUCache<UPoly, List<Root>>> {
+    private val rootIsolationCache = ThreadLocal.withInitial<LRUCache<Pair<UPoly, Interval>, List<Root>>> {
         LRUCache(
             10_000
         )
@@ -32,15 +32,21 @@ object AdaptiveRootIsolation {
                 } else {
                     // due to initial interval, we know all roots are in bounds
                     val cache = rootIsolationCache.get()
-                    val cached = cache.get(factor)
+                    val key = factor to bounds
+                    val cached = cache.get(key)
                     if (cached != null) result.addAll(cached) else {
                         val roots = isolateIrrationalRoots(factor, bounds)
-                        cache.set(factor, roots)
+                        cache.set(key, roots)
                         result.addAll(roots)
                     }
                 }
             }
         return result
+    }
+
+    fun isolateRootsInBounds(polynomials: Collection<UPoly>, low: Root, high: Root): NavigableSet<Root> {
+        val roots = isolateRootsInBounds(polynomials, low.boundInterval(high))
+        return roots.filterTo(TreeSet()) { r -> low < r && r < high }
     }
 
     private fun isolateIrrationalRoots(polynomial: UPoly, initialInterval: Interval): List<Root> {

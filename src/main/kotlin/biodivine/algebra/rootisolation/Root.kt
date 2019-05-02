@@ -52,6 +52,22 @@ class Root private constructor(
         return this.upperBound + (other.lowerBound - this.upperBound) / 2
     }
 
+    fun middleValue(other: NumQ): NumQ {
+        return when {
+            this < other -> this.upperBound + (other - this.upperBound) / 2
+            other < this -> other + (this.lowerBound - other) / 2
+            else -> error("No middle value for $this and number $other")
+        }
+    }
+
+    fun boundInterval(other: Root): Interval {
+        return when {
+            this < other -> Interval(this.lowerBound, other.upperBound)
+            this > other -> Interval(other.lowerBound, this.upperBound)
+            else -> error("No bound interval for equal roots $this")
+        }
+    }
+
     private fun refine() {
         val middlePoint = lowerBound + (error / 2)
         val signChangesInLower = polynomial.transformPolyToInterval(lowerBound, middlePoint).getNumberOfSignChanges()
