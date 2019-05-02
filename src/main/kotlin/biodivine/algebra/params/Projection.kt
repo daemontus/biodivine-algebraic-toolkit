@@ -2,19 +2,20 @@ package biodivine.algebra.params
 
 import biodivine.algebra.LRUCache
 import biodivine.algebra.MPoly
+import biodivine.algebra.synth.cache_size
 import cc.redberry.rings.poly.univar.UnivariateResultants
 
 object Projection {
 
     private val discriminantCache = ThreadLocal.withInitial<LRUCache<Pair<MPoly, Int>, List<MPoly>>> {
         LRUCache(
-            10_000
+            cache_size
         )
     }
 
     private val resultantCache = ThreadLocal.withInitial<LRUCache<CacheKey, List<MPoly>>> {
         LRUCache(
-            10_000
+            cache_size
         )
     }
 

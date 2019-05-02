@@ -11,6 +11,7 @@ import kotlin.system.measureTimeMillis
 
 val two = Rings.Q.parse("2")
 val ten = Rings.Q.parse("10")
+val cache_size = 100_000
 
 fun main() {
     val ring = Rings.MultivariateRingQ(4)
@@ -47,7 +48,7 @@ fun main() {
     val model = Model(
         ring = ring,
         varNum = 2, varBounds = Box(Interval(Rings.Q.parse("1/2"), Rings.Q.parse("10")), Interval(Rings.Q.parse("1/2"), Rings.Q.parse("10"))),
-        paramNum = 3, paramBounds = Box(Interval(3, 5), Interval(4,6)),
+        paramNum = 2, paramBounds = Box(Interval(3, 5), Interval(4,6)),
         equations = listOf(polyX, polyY)
     )
 

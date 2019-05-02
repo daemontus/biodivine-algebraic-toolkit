@@ -7,6 +7,7 @@ import biodivine.algebra.ia.Interval
 import biodivine.algebra.ia.div
 import biodivine.algebra.ia.minus
 import biodivine.algebra.ia.plus
+import biodivine.algebra.synth.cache_size
 import biodivine.algebra.transformPolyToInterval
 import cc.redberry.rings.Rings
 import java.util.*
@@ -17,7 +18,7 @@ object AdaptiveRootIsolation {
 
     private val rootIsolationCache = ThreadLocal.withInitial<LRUCache<Pair<UPoly, Interval>, List<Root>>> {
         LRUCache(
-            10_000
+            cache_size
         )
     }
 
