@@ -1,5 +1,6 @@
 package biodivine.algebra.synth
 
+import biodivine.algebra.MPoly
 import biodivine.algebra.NumQ
 import biodivine.algebra.ia.div
 import biodivine.algebra.ia.evaluate
@@ -8,6 +9,7 @@ import biodivine.algebra.ia.times
 import biodivine.algebra.params.LevelGraph
 import biodivine.algebra.params.SemiAlgSet
 import biodivine.algebra.params.SemiAlgSolver
+import biodivine.algebra.params.SemiAlgTreeSolver
 import biodivine.algebra.svg.*
 import cc.redberry.rings.Rings
 import cc.redberry.rings.Rings.Q
@@ -101,8 +103,15 @@ fun List<Box>.makeTransitions(model: Model): RectTransitionSystem {
 fun Model.makeSemiAlgTransitions(states: List<Box>): SemiAlgTransitionSystem {
     // Important: parameters are the first dimensions since we want to project to them later
     val reducedRing = Rings.MultivariateRingQ(paramNum + varNum - 1)
+    val parser = reducedRing.mkCoder(*(0 until (paramNum + varNum - 1)).map { "x$it" }.toTypedArray())
     val paramRing = Rings.MultivariateRingQ(paramNum)
     val paramSolver = SemiAlgSolver(paramBounds, paramRing)
+
+    val paramBoundsExtended = (0 until paramNum).map { xi ->
+        val low = parser.parse("x$xi - ${paramBounds.data[xi].low}")
+        val high = parser.parse("x$xi - ${paramBounds.data[xi].high}")
+        low to high
+    }
 
     val transitions = ArrayList<Triple<Int, Int, SemiAlgSet>>()
     val boxToIndex = states.mapIndexed { i, box -> box to i }.toMap()
@@ -112,7 +121,7 @@ fun Model.makeSemiAlgTransitions(states: List<Box>): SemiAlgTransitionSystem {
         if (i % 100 == 0) println("Resolve transitions $i/${states.size}")
         neighbour@ for (other in states) {
             if (state === other) continue@neighbour
-            val print = false//boxToIndex.getValue(state) == 28 && boxToIndex.getValue(other) == 30
+            var print = false//boxToIndex.getValue(state) == 1 && boxToIndex.getValue(other) == 0
             var transitionDimension = -1
             for (d in 0 until varNum) {
                 if (!state.data[d].intersects(other.data[d])) {
@@ -153,25 +162,32 @@ fun Model.makeSemiAlgTransitions(states: List<Box>): SemiAlgTransitionSystem {
                         if (print) println("Condition is $condition")
                         // make a decomposition of the whole system
                         // TODO: We can make this more efficient by stripping away unused dimensions in sparse equations
-                        val cad = LevelGraph(
+                        /*val cad = LevelGraph(
                             listOf(condition),
                             reducedRing,
                             paramBounds.extend(Box(*facetBounds).eliminate(transitionDimension))
                         )
-                        if (print) println("CAD: $cad")
                         val cadProjected = LevelGraph(cad, paramNum, paramRing)
-                        if (print) println("CAD projected: $cadProjected")
                         val validCells = cad.walkCells().mapNotNullTo(HashSet()) { (point, cell) ->
                             val result = condition.evaluate(*point.toTypedArray())
-                            if (print) println("Cell $cell with $point evaluates to $result")
                             if (result <= Q.zero) null else {
                                 cell.project(paramNum)
                             }
                         }
+                        print = validCells.isNotEmpty()
+                        if (print) println("CAD: $cad")
+                        if (print) println("CAD projected: $cadProjected")*/
+                        val extendedBounds = Box(*facetBounds).eliminate(transitionDimension)
+                        val extendedBoundPolynomials = extendedBounds.data.mapIndexed { xi, interval ->
+                            val low = parser.parse("x${xi + paramNum} - ${interval.low}")
+                            val high = parser.parse("x${xi + paramNum} - ${interval.high}")
+                            low to high
+                        }
+                        if (print) paramSolver.debug = true
+                        val positiveProjected = paramSolver.positiveExtended(condition, extendedBounds, paramBoundsExtended + extendedBoundPolynomials)
                         paramSolver.run {
-                            val params = SemiAlgSet(cadProjected, validCells).simplify()
+                            val params = positiveProjected
                             if (print) println("Resulting params: $params")
-                            if (print) println("Basis: ${params.levelGraph.basis}")
                             if (print) exitProcess(0)
                             if (params.isNotEmpty()) {
                                 transitions.add(
@@ -200,23 +216,21 @@ fun Model.makeSemiAlgTransitions(states: List<Box>): SemiAlgTransitionSystem {
                         val commonValue = facetBounds[transitionDimension].low
                         // this is the equation that needs to be negative for our derivatives
                         val condition = numerator.eliminate(paramNum + transitionDimension, commonValue)
-                        // make a decomposition of the whole system
-                        val cad = LevelGraph(
-                            listOf(condition),
-                            reducedRing,
-                            paramBounds.extend(Box(*facetBounds).eliminate(transitionDimension))
-                        )
-                        //println("Original CAD: $cad")
-                        val cadProjected = LevelGraph(cad, paramNum, paramRing)
-                        //println("Projected CAD: $cadProjected")
-                        val validCells = cad.walkCells().mapNotNullTo(HashSet()) { (point, cell) ->
-                            val result = condition.evaluate(*point.toTypedArray())
-                            if (result >= Q.zero) null else {
-                                cell.project(paramNum)
-                            }
+                        // TODO: We can make this more efficient by stripping away unused dimensions in sparse equations
+                        if (print) println("Condition: $condition")
+                        val extendedBounds = Box(*facetBounds).eliminate(transitionDimension)
+                        val extendedBoundPolynomials = extendedBounds.data.mapIndexed { xi, interval ->
+                            val low = parser.parse("x${xi + paramNum} - ${interval.low}")
+                            val high = parser.parse("x${xi + paramNum} - ${interval.high}")
+                            low to high
                         }
+                        if (print) paramSolver.debug = true
+                        // note that we can't just negate the set, because its a different type of condition (quantifiers)
+                        val positiveProjected = paramSolver.negativeExtended(condition, extendedBounds, paramBoundsExtended + extendedBoundPolynomials)
                         paramSolver.run {
-                            val params = SemiAlgSet(cadProjected, validCells).simplify()
+                            val params = positiveProjected
+                            if (print) println("Resulting params: $params")
+                            if (print) exitProcess(0)
                             if (params.isNotEmpty()) {
                                 transitions.add(
                                     Triple(boxToIndex.getValue(state), boxToIndex.getValue(other),params)

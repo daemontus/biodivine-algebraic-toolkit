@@ -44,11 +44,6 @@ object AdaptiveRootIsolation {
         return result
     }
 
-    fun isolateRootsInBounds(polynomials: Collection<UPoly>, low: Root, high: Root): NavigableSet<Root> {
-        val roots = isolateRootsInBounds(polynomials, low.boundInterval(high))
-        return roots.filterTo(TreeSet()) { r -> low < r && r < high }
-    }
-
     private fun isolateIrrationalRoots(polynomial: UPoly, initialInterval: Interval): List<Root> {
         // At this point, we know there are no linear roots and that all roots we create are actually
         // unique, but only for this polynomial!

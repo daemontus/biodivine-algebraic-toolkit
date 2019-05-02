@@ -2,7 +2,6 @@ package biodivine.algebra.synth
 
 import biodivine.algebra.params.SemiAlgSet
 import biodivine.algebra.params.SemiAlgSolver
-import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReferenceArray
 
@@ -32,6 +31,14 @@ class ConcurrentArrayStateMap(
                 val c = current ?: zero
                 if (current != null && value subset current) return false
                 val union = c or value
+                /*if (!(value subset union) || !(c subset union)) {
+                    println("Value: $value")
+                    println("Current: $c")
+                    println("Union: $union")
+                    println("Value subset: ${value subset union}")
+                    println("Current subset: ${c subset union}")
+                    error("")
+                }*/
             } while (!data.compareAndSet(state, current, union))
             if (current == null) sizeAtomic.incrementAndGet()
             return true

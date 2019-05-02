@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.max
 
 typealias LevelList = List<Set<MPoly>>
-
+/*
 /**
  * Merge levels takes a set of bound polynomials, two level lists and a set of new polynomials
  * and merges them at dimension d.
@@ -236,7 +236,7 @@ sealed class SemiAlgTree {
 }
 
 fun emptyLevelList(size: Int): LevelList = (1..size).map { emptySet<MPoly>() }
-
+*/
 fun LevelList.zip(other: LevelList): LevelList {
     if (this.size < other.size) return other.zip(this)
     // this is larger

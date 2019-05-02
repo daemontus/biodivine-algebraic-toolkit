@@ -14,7 +14,7 @@ class SemiAlgTransitionSystem(
 
     private fun newMap() = ConcurrentArrayStateMap(stateCount, solver)
 
-    private val successors: Map<Int, List<Pair<Int, SemiAlgSet>>> = transitions
+    val successors: Map<Int, List<Pair<Int, SemiAlgSet>>> = transitions
         .groupBy({ it.first }, { it.second to it.third }).withDefault { emptyList() }
 
     private val predecessor: Map<Int, List<Pair<Int, SemiAlgSet>>> = transitions

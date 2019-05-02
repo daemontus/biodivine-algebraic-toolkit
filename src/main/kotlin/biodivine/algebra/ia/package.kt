@@ -171,7 +171,7 @@ fun NumQ.mapInto(bounds: Interval, max: Int): Int {
     val scale = ((this - bounds.low) / (bounds.high - bounds.low)) * max
     return scale.numerator().divide(scale.denominator()).toLong().toInt()
 }
-
+/*
 fun SemiAlgSet.draw(x: Interval, y: Interval, pixelsX: Int, pixelsY: Int): BufferedImage {
     val stepX = x.size / pixelsX
     val stepY = y.size / pixelsY
@@ -196,7 +196,7 @@ fun SemiAlgSet.draw(x: Interval, y: Interval, pixelsX: Int, pixelsY: Int): Buffe
         }
     }*/
     return image
-}
+}*/
 
 fun main() {
     projectPolyY()

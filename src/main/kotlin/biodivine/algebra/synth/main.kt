@@ -13,8 +13,8 @@ val two = Rings.Q.parse("2")
 val ten = Rings.Q.parse("10")
 
 fun main() {
-    val ring = Rings.MultivariateRingQ(5)
-    val parser = ring.mkCoder("p", "q", "k", "x", "y")
+    val ring = Rings.MultivariateRingQ(4)
+    val parser = ring.mkCoder("p", "q", "x", "y")
     val polyX = run {
         val p1 = parser.parse("1/10 * x")
         val p2 = parser.parse("1/2")
@@ -28,7 +28,7 @@ fun main() {
     }
 
     val polyY = run {
-        val kp = parser.parse("k")
+        val kp = parser.parse("5/100")
         val c1 = parser.parse("1 * 4/100 * 4/100 * 625/10000")
         val num1 = parser.parse("p^2")
         val den1 = parser.parse("y^2 + p^2")
@@ -43,20 +43,18 @@ fun main() {
         val m3 = r2.multiply(r3)
         m2.add(m3).add(kp).subtract(p1)
     }
-
-    println("PolyY: ${polyY}")
     
     val model = Model(
         ring = ring,
         varNum = 2, varBounds = Box(Interval(Rings.Q.parse("1/2"), Rings.Q.parse("10")), Interval(Rings.Q.parse("1/2"), Rings.Q.parse("10"))),
-        paramNum = 3, paramBounds = Box(Interval(3, 5), Interval(4,6), Interval(Q.parse("1/100"), Q.parse("10/100"))),
+        paramNum = 3, paramBounds = Box(Interval(3, 5), Interval(4,6)),
         equations = listOf(polyX, polyY)
     )
 
     val ss = model.computeStateSpace(/*listOf(
         Box(Interval(Rings.Q.parse("0"), Rings.Q.parse("10")), Interval(Rings.Q.parse("0"), Rings.Q.parse("2"))),
         Box(Interval(Rings.Q.parse("0"), Rings.Q.parse("10")), Interval(Rings.Q.parse("2"), Rings.Q.parse("10")))
-    )*/listOf(model.varBounds), Rings.Q.parse("1/10000"), Rings.Q.parse("1/1000"))
+    )*/listOf(model.varBounds), Rings.Q.parse("1/1000"), Rings.Q.parse("1/100"))
     println("States: ${ss.size}")
 
     val notSmall = ss.indices.filter { i ->
@@ -85,17 +83,25 @@ fun main() {
             val initial = ConcurrentArrayStateMap(ts.states.size, solver)
             for (s in notSmall) { initial.union(s, solver.one) }
 
+            /*for (s in states.indices) {
+                println("Successors: $s (${states[s]}")
+                ts.successors.getValue(s).forEach { (t, p) ->
+                    println("To $t for $p")
+                }
+            }*/
+
             // AG small = ! EF ! small
             val efNotSmall = initial.reachBackward()
 
             println("Reachability done.")
 
             solver.run {
+                println("One is: ${solver.one.isEmpty()}")
                 var notAG = zero
                 for (s in 0 until ts.states.size) {
-                    println("$s / ${ts.states.size}")
+                    if (s%10 == 0) println("$s / ${ts.states.size}")
                     //println("In state ${ts.states[s]} can reach large ${efNotSmall.get(s)}")
-                    notAG = notAG or efNotSmall.get(s).not()
+                    notAG = notAG or (efNotSmall.get(s).not())
                     //if (s % 10 == 0) notAG = notAG.simplify()
                 }
                 println("Not AG: $notAG")

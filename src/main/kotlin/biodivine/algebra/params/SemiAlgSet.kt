@@ -45,7 +45,7 @@ data class Cell(
 
 
 }
-
+/*
 /**
  * Represents a semi-algebraic set defined by the given set of algebraic varieties (0 = polynomial).
  * The valid cells of the decomposition are then given in the bit set.
@@ -234,4 +234,4 @@ fun main() {
         }
     }
     println("Elapsed: $elapsed")
-}
+}*/
