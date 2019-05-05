@@ -26,7 +26,7 @@ fun represilator4(paramIntervals: Map<String, Interval>): Model {
         "f4" to Q.parse("1/10")
     ).filterKeys { it !in paramIntervals.keys }
 
-    val vars = listOf("k1", "k2", "K1", "K2", "f1", "f2", "x1", "x2", "x3", "x4")
+    val vars = listOf("k1", "k2", "k3", "k4", "K1", "K2", "K3", "K4", "f1", "f2", "f3", "f4", "x1", "x2", "x3", "x4")
     val ring = Rings.MultivariateRingQ(vars.size)
     val variableIndices = vars.mapIndexed { index, v -> v to index }.toMap()
     val parser = ring.mkCoder(*vars.toTypedArray())
@@ -79,7 +79,7 @@ fun represilator4(paramIntervals: Map<String, Interval>): Model {
 
 fun main() {
 
-    val model = represilator(mapOf(
+    val model = represilator4(mapOf(
         "K1" to Interval(Q.parse("1/100"), Q.parse("10")),
         "f1" to Interval(Q.parse("1/100"), Q.parse("1"))
     ))
