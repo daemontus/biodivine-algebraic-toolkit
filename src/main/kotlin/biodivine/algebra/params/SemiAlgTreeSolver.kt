@@ -3,14 +3,20 @@ package biodivine.algebra.params
 import biodivine.algebra.MPoly
 import biodivine.algebra.NumQ
 import biodivine.algebra.ia.Interval
+import biodivine.algebra.ia.div
+import biodivine.algebra.ia.plus
+import biodivine.algebra.ia.times
 import biodivine.algebra.rootisolation.AdaptiveRootIsolation
 import biodivine.algebra.rootisolation.Root
+import biodivine.algebra.rootisolation.compareTo
 import biodivine.algebra.synth.Box
 import cc.redberry.rings.Rings
 import cc.redberry.rings.Rings.Q
 import cc.redberry.rings.poly.IPolynomialRing
 import cc.redberry.rings.poly.multivar.MultivariatePolynomial
 import cc.redberry.rings.poly.univar.UnivariateResultants
+import java.awt.Color
+import java.awt.image.BufferedImage
 
 typealias SemiAlgSet = SemiAlgTreeSolver.Tree
 typealias SemiAlgSolver = SemiAlgTreeSolver
@@ -373,6 +379,43 @@ class SemiAlgTreeSolver(
         }
     }
 
+    fun Tree.draw(pixelsX: Int, pixelsY: Int): BufferedImage {
+        if (this is Tree.Leaf) error("Set is $this")
+        val image = BufferedImage(pixelsX, pixelsY, BufferedImage.TYPE_INT_RGB)
+        val x = boundBox.data[0]; val y = boundBox.data[1]
+        val stepX = x.size / pixelsX
+        val stepY = y.size / pixelsY
+        var cellX = 0
+        for (iX in 0 until pixelsX) {
+            val pixelAsRational: NumQ = x.low + stepX * iX
+            if (cellX < this.roots.size && pixelAsRational > this.roots[cellX].root) {
+                cellX += 1  // adjust cell
+            }
+            val cell = lookup(cellX)
+            if (cell is Tree.Leaf) {
+                if (cell.member) {
+                    for (iY in 0 until pixelsY) image.setRGB(iX, iY, Color.green.rgb)
+                }
+            } else {
+                var cellY = 0
+                val roots = AdaptiveRootIsolation.isolateRootsInBounds(cell.roots.map { it.poly.evaluate(0, pixelAsRational).asUnivariate() }, y).toList().sorted()
+                if (roots.size != cell.roots.size) {
+                    // this can happen if our sample point is shitty due to low precision
+                    continue
+                }// error("WTF")
+                for (iY in 0 until pixelsY) {
+                    val pixelYAsRational: NumQ = y.low + stepY * iY
+                    if (cellY < roots.size && pixelYAsRational > roots[cellY]) cellY += 1
+                    val leaf = cell.lookup(cellY) as? Tree.Leaf ?: error("WTF")
+                    if (leaf.member) {
+                        image.setRGB(iX, iY, Color.green.rgb)
+                    }
+                }
+            }
+        }
+        return image
+    }
+
     sealed class Tree {
 
         abstract val level: Int
@@ -510,6 +553,8 @@ fun MPoly.evaluate(point: List<NumQ>): MultivariatePolynomial<NumQ> {
     if (point.isEmpty()) return this
     return this.evaluate(evalArrays[point.size], point.toTypedArray())
 }
+
+fun NumQ.roundToInt() = numerator().divide(denominator()).toLong().toInt()
 
 fun main() {
     val dimensions = 2

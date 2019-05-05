@@ -40,7 +40,7 @@ class SemiAlgTransitionSystem(
                 while (state > -1) {
                     solver.run {
                         i += 1
-                        if (i % 50 == 0) println("Processed $i states")
+                        if (i % 1000 == 0) println("Processed $i states")
                         for ((source, edgeParams) in predecessor.getValue(state)) {
                             val bound = if (guard == null) result.get(state) else {
                                 result.get(state) and guard.get(source)

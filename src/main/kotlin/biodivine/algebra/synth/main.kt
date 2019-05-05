@@ -44,6 +44,9 @@ fun main() {
         val m3 = r2.multiply(r3)
         m2.add(m3).add(kp).subtract(p1)
     }
+
+    println("PolyX ${polyX.numerator()}")
+    println("PolyY ${polyY.numerator()}")
     
     val model = Model(
         ring = ring,
@@ -55,13 +58,13 @@ fun main() {
     val ss = model.computeStateSpace(/*listOf(
         Box(Interval(Rings.Q.parse("0"), Rings.Q.parse("10")), Interval(Rings.Q.parse("0"), Rings.Q.parse("2"))),
         Box(Interval(Rings.Q.parse("0"), Rings.Q.parse("10")), Interval(Rings.Q.parse("2"), Rings.Q.parse("10")))
-    )*/listOf(model.varBounds), Rings.Q.parse("1/1000"), Rings.Q.parse("1/100"))
+    )*/listOf(model.varBounds), Rings.Q.parse("1/10000"), Rings.Q.parse("1/1000"))
     println("States: ${ss.size}")
 
     val notSmall = ss.indices.filter { i ->
         val b = ss[i]
-        b.data[1].high > two
-        //b.data[1].low < two
+        //b.data[1].high > two
+        b.data[1].low < two
     }.toSet()
 
     /*val imageProp = PropertySpace(ss, notSmall).draw().normalize(Rings.Q.parse("1000"))
@@ -107,8 +110,8 @@ fun main() {
                 }
                 println("Not AG: $notAG")
 
-                //val image = notAG.draw(model.paramBounds.data[0], model.paramBounds.data[1], 500, 500)
-                //ImageIO.write(image, "PNG", File("out.png"))
+                val image = notAG.draw(500, 500)
+                ImageIO.write(image, "PNG", File("AG_high.png"))
             }
         }
     }

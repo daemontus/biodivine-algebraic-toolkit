@@ -113,15 +113,14 @@ fun Model.makeSemiAlgTransitions(states: List<Box>): SemiAlgTransitionSystem {
         low to high
     }
 
-    val transitions = ArrayList<Triple<Int, Int, SemiAlgSet>>()
     val boxToIndex = states.mapIndexed { i, box -> box to i }.toMap()
-    var i = 0
-    for (state in states) {
-        i += 1
-        if (i % 100 == 0) println("Resolve transitions $i/${states.size}")
+
+    val transitions = states.indices.toList().mapParallel { s ->
+        val state = states[s]
+        if (s % 100 == 0) println("Resolve transitions $s/${states.size}")
+        val transitions = ArrayList<Triple<Int, Int, SemiAlgSet>>()
         neighbour@ for (other in states) {
             if (state === other) continue@neighbour
-            var print = false//boxToIndex.getValue(state) == 1 && boxToIndex.getValue(other) == 0
             var transitionDimension = -1
             for (d in 0 until varNum) {
                 if (!state.data[d].intersects(other.data[d])) {
@@ -159,46 +158,21 @@ fun Model.makeSemiAlgTransitions(states: List<Box>): SemiAlgTransitionSystem {
                         val commonValue = facetBounds[transitionDimension].low
                         // this is the equation that needs to be positive for our derivatives
                         val condition = numerator.eliminate(paramNum + transitionDimension, commonValue)
-                        if (print) println("Condition is $condition")
                         // make a decomposition of the whole system
                         // TODO: We can make this more efficient by stripping away unused dimensions in sparse equations
-                        /*val cad = LevelGraph(
-                            listOf(condition),
-                            reducedRing,
-                            paramBounds.extend(Box(*facetBounds).eliminate(transitionDimension))
-                        )
-                        val cadProjected = LevelGraph(cad, paramNum, paramRing)
-                        val validCells = cad.walkCells().mapNotNullTo(HashSet()) { (point, cell) ->
-                            val result = condition.evaluate(*point.toTypedArray())
-                            if (result <= Q.zero) null else {
-                                cell.project(paramNum)
-                            }
-                        }
-                        print = validCells.isNotEmpty()
-                        if (print) println("CAD: $cad")
-                        if (print) println("CAD projected: $cadProjected")*/
                         val extendedBounds = Box(*facetBounds).eliminate(transitionDimension)
                         val extendedBoundPolynomials = extendedBounds.data.mapIndexed { xi, interval ->
                             val low = parser.parse("x${xi + paramNum} - ${interval.low}")
                             val high = parser.parse("x${xi + paramNum} - ${interval.high}")
                             low to high
                         }
-                        if (print) paramSolver.debug = true
                         val positiveProjected = paramSolver.positiveExtended(condition, extendedBounds, paramBoundsExtended + extendedBoundPolynomials)
                         paramSolver.run {
                             val params = positiveProjected
-                            if (print) println("Resulting params: $params")
-                            if (print) exitProcess(0)
                             if (params.isNotEmpty()) {
                                 transitions.add(
                                     Triple(boxToIndex.getValue(state), boxToIndex.getValue(other),params)
                                 )
-                                /*if (params.validCells.size > 1) {
-                                    println("Create a partial transition, because intervals give us $possibleDerivatives")
-                                    println("Common value $commonValue")
-                                    println("Transition from $state to $other with $params")
-                                    //exitProcess(0)
-                                }*/
                             }
                         }
                     }
@@ -217,37 +191,36 @@ fun Model.makeSemiAlgTransitions(states: List<Box>): SemiAlgTransitionSystem {
                         // this is the equation that needs to be negative for our derivatives
                         val condition = numerator.eliminate(paramNum + transitionDimension, commonValue)
                         // TODO: We can make this more efficient by stripping away unused dimensions in sparse equations
-                        if (print) println("Condition: $condition")
                         val extendedBounds = Box(*facetBounds).eliminate(transitionDimension)
                         val extendedBoundPolynomials = extendedBounds.data.mapIndexed { xi, interval ->
                             val low = parser.parse("x${xi + paramNum} - ${interval.low}")
                             val high = parser.parse("x${xi + paramNum} - ${interval.high}")
                             low to high
                         }
-                        if (print) paramSolver.debug = true
                         // note that we can't just negate the set, because its a different type of condition (quantifiers)
                         val positiveProjected = paramSolver.negativeExtended(condition, extendedBounds, paramBoundsExtended + extendedBoundPolynomials)
                         paramSolver.run {
                             val params = positiveProjected
-                            if (print) println("Resulting params: $params")
-                            if (print) exitProcess(0)
                             if (params.isNotEmpty()) {
                                 transitions.add(
                                     Triple(boxToIndex.getValue(state), boxToIndex.getValue(other),params)
                                 )
-                                /*if (params.validCells.size > 1) {
-                                    println("1Create a partial transition, because intervals give us $possibleDerivatives")
-                                    println("Common value $commonValue")
-                                    println("Transition from $state to $other with $params")
-                                    //exitProcess(0)
-                                }*/
                             }
                         }
                     }
                 }
             }
         }
-    }
+        /*paramSolver.run {
+            //if (transitions.any { it.third.isNotEmpty() && it.third.not().isNotEmpty() }) println("Transitions! ${transitions}")
+            val hasSuccessor = transitions.fold(zero) { a, b -> a or b.third }
+            val isSing = hasSuccessor.not()
+            if (isSing.isNotEmpty()) {
+                println("State $state is sink for $isSing")
+            }
+        }*/
+        transitions
+    }.flatten()
 
     println("Transitions: ${transitions.size}")
 

@@ -28,5 +28,5 @@ compileTestKotlin {
 }
 
 application {
-    mainClassName = 'biodivine.algebra.synth.MainKt'
+    mainClassName = 'biodivine.algebra.synth.G1sKt'
 }
