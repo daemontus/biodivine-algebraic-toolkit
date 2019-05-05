@@ -57,7 +57,7 @@ fun represilator6(paramIntervals: Map<String, Interval>): Model {
     val reducedRing = Rings.MultivariateRingQ(vars.size - constants.size)
     return Model(
         ring = reducedRing,
-        varNum = 4, varBounds = Box(
+        varNum = 6, varBounds = Box(
             Interval(Q.parse("0"), Q.parse("15")),
             Interval(Q.parse("0"), Q.parse("15")),
             Interval(Q.parse("0"), Q.parse("15")),
